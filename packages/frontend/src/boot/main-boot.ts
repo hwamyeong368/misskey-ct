@@ -28,6 +28,7 @@ import { addCustomEmoji, removeCustomEmojis, updateCustomEmojis } from '@/custom
 import { prefer } from '@/preferences.js';
 // kyunet: feat/improve_serverDisconnectedBehavior - feat/stream-reconnect-catchup
 import { updateCurrentAccount, refreshCurrentAccount } from '@/accounts.js';
+import { initChatUnreadSubscription, resolveChatUnreadGap } from '@/chat-unread-subscription.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 // kyunet: feat/improve_serverDisconnectedBehavior - feat/stream-reconnect-catchup
 import { globalEvents } from '@/events.js';
@@ -300,6 +301,9 @@ export async function mainBoot() {
 		if (store.s.realtimeMode) {
 			const stream = useStream();
 
+			// 쪽지 미읽음 구독의 공백 상태를 채팅 이벤트 처리와 함께 관리한다
+			initChatUnreadSubscription(stream);
+
 			let reloadDialogShowing = false;
 			stream.on('_disconnected_', async () => {
 				if (prefer.s.serverDisconnectedBehavior === 'reload') {
@@ -355,8 +359,16 @@ export async function mainBoot() {
 				});
 			});
 
+			// 서버의 두 작업이 보낸 알림은 순서가 바뀌어 도착할 수 있다. 버전이 최신인 상태만 따른다.
+			let chatUnreadVersion = 0;
+			main.on('chatUnread', ({ version, ...state }) => {
+				if (version <= chatUnreadVersion) return;
+				chatUnreadVersion = version;
+				updateCurrentAccount(state);
+				resolveChatUnreadGap();
+			});
+
 			main.on('newChatMessage', () => {
-				updateCurrentAccount({ hasUnreadChatMessages: true });
 				sound.playMisskeySfx('chatMessage');
 			});
 
