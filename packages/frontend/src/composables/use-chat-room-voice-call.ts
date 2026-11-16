@@ -106,6 +106,7 @@ export function useChatRoomVoiceCall(room: MaybeRefOrGetter<Misskey.entities.Cha
 		if (target == null || joining) return;
 		joining = true;
 		try {
+			// arti: 他のサーバーで開かれる通話には相手のサーバーに IP アドレスが見えるので、ホストごとに初回だけ確認する
 			const host = target.owner.host;
 			if (host != null && !prefer.s['voiceCall.acknowledgedRemoteHosts'].includes(host)) {
 				const { canceled } = await os.confirm({
