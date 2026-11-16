@@ -106,6 +106,16 @@ export function useChatRoomVoiceCall(room: MaybeRefOrGetter<Misskey.entities.Cha
 		if (target == null || joining) return;
 		joining = true;
 		try {
+			// arti: 他のサーバーで開かれる通話には相手のサーバーに IP アドレスが見えるので、ホストごとに初回だけ確認する
+			const host = target.owner.host;
+			if (host != null && !prefer.s['voiceCall.acknowledgedRemoteHosts'].includes(host)) {
+				const { canceled } = await os.confirm({
+					type: 'info',
+					text: i18n.tsx._voiceCall.remoteHostNotice({ host }),
+				});
+				if (canceled) return;
+				prefer.commit('voiceCall.acknowledgedRemoteHosts', [...prefer.s['voiceCall.acknowledgedRemoteHosts'], host]);
+			}
 			// 録画している人がいれば、入る前に知らせる。入ると自分の声や画面も録画に残る
 			if (someoneRecording.value) {
 				const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts._voiceCall.recordingJoinNotice });
