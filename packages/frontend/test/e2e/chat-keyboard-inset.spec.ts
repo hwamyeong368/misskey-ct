@@ -132,7 +132,7 @@ test.describe('the bottom of a conversation while the software keyboard is open'
 			const open = await measure(page);
 			// 입력란도 메뉴 바로 위에 붙는다 (메뉴가 줄어든 만큼 함께 줄어야 한다)
 			expect(Math.abs(open.footerTop - open.formBottom!)).toBeLessThanOrEqual(2);
-			expect(open.viewportBottom - open.footerTop).toBeLessThanOrEqual(52);
+			// arti: 초코픽의 friendly UI 하단 메뉴 높이(52px) 검사는 뺐다. CT에는 friendly UI가 없고 기본 UI 하단 메뉴는 더 높다
 
 			await closeKeyboard(page);
 
