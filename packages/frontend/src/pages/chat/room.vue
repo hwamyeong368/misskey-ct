@@ -1060,22 +1060,10 @@ function onSheetEsc(ev: KeyboardEvent) {
 }
 
 const chatStickyEl = useTemplateRef('chatStickyEl');
-const chatScrollerEl = useTemplateRef('chatScrollerEl');
-let scrollToRestore = 0;
-
-function currentChatScroller(isSplit: boolean) {
-	return isSplit ? chatScrollerEl.value : getScrollContainer(chatScrollerEl.value?.parentElement ?? null);
-}
-
-watch(split, (_next, previous) => {
-	scrollToRestore = currentChatScroller(previous)?.scrollTop ?? 0;
-}, { flush: 'pre' });
-watch(split, next => {
-	// footer とカードの高さも即時に測り直す。通常の ResizeObserver は 100ms 待つため、それだけでは一瞬ずれる。
+watch(split, () => {
+	// 배치가 바뀌면 배너와 페이지 헤더의 높이를 바로 다시 잰다.
 	(pageEl.value as any)?.refreshStickyLayout?.();
 	(chatStickyEl.value as any)?.refresh?.();
-	const scroller = currentChatScroller(next);
-	if (scroller != null) scroller.scrollTop = scrollToRestore;
 }, { flush: 'post' });
 
 const formEl = useTemplateRef('formEl');
@@ -1119,7 +1107,7 @@ const headerTabs = computed(() => room.value ? [{
 }, ...searchTab.value]);
 
 // 参加バナーは誰かが通話中 (または relay が到達不能) のときだけ出す。誰も通話していなければ開始はヘッダーのボタンに任せる
-const joinPanelVisible = computed(() => voiceCallState.participants.value.length > 0 || voiceCallState.providerUnavailable.value);
+const joinPanelVisible = computed(() => voiceCallState.participants.value.length > 0);
 
 // ヘッダーの通話ボタン。参加バナーが出ていないとき (誰も通話していないメッセージタブ、またはバナーの無いほかのタブ) に出す
 const showHeaderCall = computed(() => {
