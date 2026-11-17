@@ -128,6 +128,6 @@ describe('그룹 아이콘 수신', () => {
 		expect(f.state.lastRemoteUpdatedAt?.toISOString()).toBe(newDate);
 		expect(f.state.iconId).toBe('https://remote.example/new-icon.png');
 		// CT: 다른 서버 장식은 카탈로그에 등록하지 않고 원본 주소를 그룹에 담는다.
-		expect(f.state.iconDecorations?.[0]?.url).toBe('https://remote.example/new-decoration.png');
+		expect((f.state.iconDecorations?.[0] as { url?: string } | undefined)?.url).toBe('https://remote.example/new-decoration.png');
 	});
 });
