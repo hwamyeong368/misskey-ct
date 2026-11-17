@@ -164,7 +164,7 @@ describe('그룹 초대 링크', () => {
 			expect(html.status).toBe(200);
 			expect(htmlBody).toContain(`<meta property="og:title" content="${room.name}"`);
 			expect(htmlBody).toContain('<meta name="robots" content="noindex"');
-			expect(htmlBody).toContain('1 사용자');
+			expect(htmlBody).toContain('1 유저'); // CT의 ko-KR 문구
 			expect(parse(htmlBody).querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe(room.iconUrl);
 			expect(html.headers.get('vary')).toContain('Accept-Language');
 			expect(ap.status).toBe(200);
