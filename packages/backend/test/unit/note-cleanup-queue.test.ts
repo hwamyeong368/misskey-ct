@@ -426,7 +426,7 @@ test('구 API는 같은 계정 정리 잠금 충돌을 500 대신 진행 중 혼
 	f.busy.add('note-cleanup-alice');
 	const before = structuredClone(f.rows);
 	const endpoint = new UpdateAutoDeleteSettings(f.service);
-	await expect(endpoint.exec({ autoDeleteNotesAfterDays: 30 }, { id: 'alice' } as any, null, null)).rejects.toMatchObject({ code: 'CLEANUP_IN_PROGRESS', id: 'a648a370-aba3-4dc8-944f-907cd88e850b', kind: 'server', httpStatusCode: 503 });
+	await expect(endpoint.exec({ autoDeleteNotesAfterDays: 30 }, { id: 'alice' } as any, null, undefined)).rejects.toMatchObject({ code: 'CLEANUP_IN_PROGRESS', id: 'a648a370-aba3-4dc8-944f-907cd88e850b', kind: 'server', httpStatusCode: 503 });
 	expect(f.rows).toEqual(before);
 });
 

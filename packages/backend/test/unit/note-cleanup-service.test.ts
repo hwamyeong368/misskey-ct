@@ -313,7 +313,7 @@ test('미리 보기 응답은 공개 스키마의 최상위 필드만 담는다'
 	rows.Rule.push({ id: 'delete', userId: 'alice', ...input, enabled: true, automatic: false, lastError: null });
 	rows.MiNote.push(note('0'));
 	const endpoint = new PreviewEndpoint(service, { packMany: async (notes: unknown[]) => notes } as any);
-	const result = await endpoint.exec({ ruleIds: ['delete'] }, { id: 'alice' } as any, null, null);
+	const result = await endpoint.exec({ ruleIds: ['delete'] }, { id: 'alice' } as any, null, undefined);
 	expect(Object.keys(result).sort()).toEqual(Object.keys(previewMeta.res.properties).sort());
 	expect(result.notes).toHaveLength(1);
 	expect(result.complete).toBe(true);
@@ -829,7 +829,7 @@ test('구 API의 소수 일수는 500 대신 INVALID_VALUE로 거부하고 아�
 	const { rows, service } = await legacyFixture(30, true);
 	const before = structuredClone(rows);
 	const endpoint = new UpdateAutoDeleteSettings(service);
-	await expect(endpoint.exec({ autoDeleteNotesAfterDays: 1.5 }, { id: 'alice' } as any, null, null)).rejects.toMatchObject({ code: 'INVALID_VALUE', id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', kind: 'client' });
+	await expect(endpoint.exec({ autoDeleteNotesAfterDays: 1.5 }, { id: 'alice' } as any, null, undefined)).rejects.toMatchObject({ code: 'INVALID_VALUE', id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', kind: 'client' });
 	expect(rows).toEqual(before);
 });
 
@@ -850,7 +850,7 @@ test('구 endpoint의 같은 즐겨찾기 저장은 이름과 규칙을 보존�
 	Object.assign(favorite, { name: '내 보호', defaultName: null });
 	rows.MiNote.push(note('000'));
 
-	await new UpdateAutoDeleteSettings(service).exec({ autoDeleteKeepFavorites: true }, { id: 'alice' } as any, null, null);
+	await new UpdateAutoDeleteSettings(service).exec({ autoDeleteKeepFavorites: true }, { id: 'alice' } as any, null, undefined);
 
 	expect(linked('favorite')).toMatchObject({ id: favorite.id, name: '내 보호', defaultName: null, enabled: true });
 	expect(rows.Rule).toHaveLength(2);
@@ -1033,14 +1033,14 @@ for (const [EndpointClass, meta, params, isRead] of [
 		const { service, lock } = fixture();
 		lock.available = false;
 		const endpoint = new (EndpointClass as any)(service, noteEntityService);
-		await expect(endpoint.exec(params, { id: 'alice' } as any, null, null)).rejects.toMatchObject({ code: 'CLEANUP_IN_PROGRESS', kind: 'server', httpStatusCode: 503 });
+		await expect(endpoint.exec(params, { id: 'alice' } as any, null, undefined)).rejects.toMatchObject({ code: 'CLEANUP_IN_PROGRESS', kind: 'server', httpStatusCode: 503 });
 		expect((meta.errors as any).cleanupInProgress).toMatchObject({ code: 'CLEANUP_IN_PROGRESS', kind: 'server', httpStatusCode: 503 });
 	});
 	test(`${meta.errors.invalidCleanup.id}: 입력 오류 세부 정보와 원래 예외를 보존한다`, async () => {
 		for (const error of [new CleanupInputError('INVALID_CLIP', 'condition'), new Error('database unavailable')]) {
 			const fail = async () => { throw error; };
 			const endpoint = new (EndpointClass as any)({ save: fail, remove: fail, list: fail, preview: fail, request: fail, updateSettings: fail }, noteEntityService);
-			const result = endpoint.exec(params, { id: 'alice' } as any, null, null);
+			const result = endpoint.exec(params, { id: 'alice' } as any, null, undefined);
 			if (error instanceof CleanupInputError) await expect(result).rejects.toMatchObject({ code: 'INVALID_CLEANUP', kind: 'client', info: { code: 'INVALID_CLIP', path: 'condition' } });
 			else await expect(result).rejects.toBe(error);
 		}
@@ -1051,7 +1051,7 @@ test('update-settings 진입점은 드라이브 보존 설정을 저장하고 �
 	const { rows, service } = fixture();
 	rows.State[0].cursor = 'cursor';
 	const endpoint = new UpdateSettingsEndpoint(service);
-	expect(await endpoint.exec({ keepDriveFiles: false }, { id: 'alice' } as any, null, null)).toEqual({ keepDriveFiles: false });
+	expect(await endpoint.exec({ keepDriveFiles: false }, { id: 'alice' } as any, null, undefined)).toEqual({ keepDriveFiles: false });
 	expect(rows.State[0].keepDriveFiles).toBe(false);
 	expect(rows.State[0].cursor).toBe('cursor');
 	expect((await service.list('alice')).keepDriveFiles).toBe(false);
@@ -1070,10 +1070,10 @@ test('create 진입점은 자동 실행 요청을 명시 거절하고 false·생
 	const { service, input, rows } = fixture();
 	const endpoint = new CreateEndpoint(service);
 	for (const action of ['delete', 'keep']) {
-		await expect(endpoint.exec({ ...input, action, automatic: true }, { id: 'alice' } as any, null, null)).rejects.toMatchObject({ code: 'INVALID_CLEANUP', info: { code: action === 'keep' ? 'KEEP_CANNOT_RUN' : 'PREVIEW_REQUIRED' } });
+		await expect(endpoint.exec({ ...input, action, automatic: true }, { id: 'alice' } as any, null, undefined)).rejects.toMatchObject({ code: 'INVALID_CLEANUP', info: { code: action === 'keep' ? 'KEEP_CANNOT_RUN' : 'PREVIEW_REQUIRED' } });
 	}
 	expect(rows.Rule).toHaveLength(0);
-	for (const automatic of [false, undefined]) expect((await endpoint.exec({ ...input, automatic }, { id: 'alice' } as any, null, null)).rule.automatic).toBe(false);
+	for (const automatic of [false, undefined]) expect((await endpoint.exec({ ...input, automatic }, { id: 'alice' } as any, null, undefined)).rule.automatic).toBe(false);
 });
 
 // 실제 endpoint의 고정 오류 계약을 검사한다. 번역과 오류 해석은 프런트 시험에서 검사한다.
@@ -1081,7 +1081,7 @@ test.each(['clip', 'channel'] as const)('사라진 %s 저장 오류는 고정 �
 	const { service, input } = fixture();
 	const condition = { type: 'all', children: [{ type, ids: ['missing-secret'] }] };
 	let caught: unknown;
-	try { await new CreateEndpoint(service).exec({ ...input, condition } as any, { id: 'alice' } as any, null, null); } catch (error) { caught = error; }
+	try { await new CreateEndpoint(service).exec({ ...input, condition } as any, { id: 'alice' } as any, null, undefined); } catch (error) { caught = error; }
 
 	expect(caught).toMatchObject({ code: 'INVALID_CLEANUP', info: { code: type === 'clip' ? 'MISSING_CLIP' : 'MISSING_CHANNEL', path: 'condition.children.0' } });
 	expect((caught as any).info.code).not.toContain('missing-secret');
