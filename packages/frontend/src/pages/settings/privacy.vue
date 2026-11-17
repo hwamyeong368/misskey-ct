@@ -250,52 +250,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</FormSection>
 		</SearchMarker>
 
-		<!-- bscone: auto-delete section -->
-		<SearchMarker :keywords="['auto', 'delete', 'notes']">
-			<FormSection>
-				<template #label><SearchLabel>{{ i18n.ts.autoDeleteNotes }}</SearchLabel></template>
-
-				<div class="_gaps_m">
-					<MkInfo>{{ i18n.ts.autoDeleteNotesDescription }}</MkInfo>
-
-					<SearchMarker :keywords="['auto', 'delete', 'enable']">
-						<MkInput
-							v-model="autoDeleteNotesAfterDays"
-							type="number"
-							:min="1"
-							:max="3650"
-							@update:modelValue="saveAutoDelete()"
-						>
-							<template #label><SearchLabel>{{ i18n.ts.autoDeleteNotesAfterDays }}</SearchLabel></template>
-							<template #suffix>{{ i18n.ts._time.day }}</template>
-							<template #caption>{{ i18n.ts.autoDeleteNotesAfterDaysDescription }}</template>
-						</MkInput>
-					</SearchMarker>
-
-					<SearchMarker :keywords="['favorite', 'keep']">
-						<MkSwitch v-model="autoDeleteKeepFavorites" @update:modelValue="saveAutoDelete()">
-							<template #label><SearchLabel>{{ i18n.ts.autoDeleteKeepFavorites }}</SearchLabel></template>
-							<template #caption><SearchText>{{ i18n.ts.autoDeleteKeepFavoritesDescription }}</SearchText></template>
-						</MkSwitch>
-					</SearchMarker>
-
-					<SearchMarker :keywords="['drive', 'file', 'keep']">
-						<MkSwitch v-model="autoDeleteKeepDriveFiles" @update:modelValue="saveAutoDelete()">
-							<template #label><SearchLabel>{{ i18n.ts.autoDeleteKeepDriveFiles }}</SearchLabel></template>
-							<template #caption><SearchText>{{ i18n.ts.autoDeleteKeepDriveFilesDescription }}</SearchText></template>
-						</MkSwitch>
-					</SearchMarker>
-
-					<MkInfo warn>{{ i18n.ts.autoDeleteNotesWarning }}</MkInfo>
-				</div>
-			</FormSection>
+		<SearchMarker :keywords="['auto', 'delete', 'notes', 'cleanup']">
+			<FormLink to="/settings/note-cleanup"><SearchLabel>{{ i18n.ts._noteCleanup.title }}</SearchLabel></FormLink>
 		</SearchMarker>
 	</div>
 </SearchMarker>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
 import type { FollowApprovalPeriodUnit } from '@/utility/follow-approval.js';
 import MkSwitch from '@/components/MkSwitch.vue';
@@ -315,6 +278,7 @@ import { FOLLOW_APPROVAL_MAX_SECONDS, FOLLOW_APPROVAL_UNIT_SECONDS, followApprov
 import * as os from '@/os.js';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFeatureBanner from '@/components/MkFeatureBanner.vue';
+import FormLink from '@/components/form/link.vue';
 
 const $i = ensureSignin();
 
@@ -397,9 +361,6 @@ const makeNotesFollowersOnlyBefore = ref($i.makeNotesFollowersOnlyBefore ?? null
 const makeNotesHiddenBefore = ref($i.makeNotesHiddenBefore ?? null);
 const hideOnlineStatus = ref($i.hideOnlineStatus);
 const publicReactions = ref($i.publicReactions);
-const autoDeleteNotesAfterDays = ref<number | null>($i?.autoDeleteNotesAfterDays ?? null);
-const autoDeleteKeepFavorites = ref($i?.autoDeleteKeepFavorites ?? false);
-const autoDeleteKeepDriveFiles = ref($i?.autoDeleteKeepDriveFiles ?? false);
 const {
 	model: followingVisibility,
 	def: followingVisibilityDef,
@@ -543,27 +504,6 @@ const makeNotesHiddenBefore_customMonths = computed({
 
 watch([makeNotesFollowersOnlyBefore, makeNotesHiddenBefore], () => {
 	save();
-});
-
-// bscone: save auto-delete settings
-async function saveAutoDelete() {
-	await misskeyApi('i/update-auto-delete-settings', {
-		autoDeleteNotesAfterDays: autoDeleteNotesAfterDays.value,
-		autoDeleteKeepFavorites: !!autoDeleteKeepFavorites.value,
-		autoDeleteKeepDriveFiles: !!autoDeleteKeepDriveFiles.value,
-	});
-}
-
-// bscone: load auto-delete settings on mount
-onMounted(async () => {
-	try {
-		const settings = await misskeyApi('i/auto-delete-settings');
-		autoDeleteNotesAfterDays.value = settings.autoDeleteNotesAfterDays;
-		autoDeleteKeepFavorites.value = settings.autoDeleteKeepFavorites;
-		autoDeleteKeepDriveFiles.value = settings.autoDeleteKeepDriveFiles;
-	} catch (error) {
-		console.error('Failed to load auto-delete settings:', error);
-	}
 });
 
 async function update_requireSigninToViewContents(value: boolean) {

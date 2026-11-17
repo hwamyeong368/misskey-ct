@@ -26,6 +26,7 @@ import { MiChannelFollowing } from '@/models/ChannelFollowing.js';
 import { MiChannelFavorite } from '@/models/ChannelFavorite.js';
 import { MiChannelMuting } from '@/models/ChannelMuting.js';
 import { MiClip } from '@/models/Clip.js';
+import { MiNoteCleanupRule, MiNoteCleanupState } from '@/models/NoteCleanupRule.js';
 import { MiClipNote } from '@/models/ClipNote.js';
 import { MiClipFavorite } from '@/models/ClipFavorite.js';
 import { MiDriveFile } from '@/models/DriveFile.js';
@@ -235,6 +236,8 @@ export const entities = [
 	MiSignin,
 	MiModerationLog,
 	MiClip,
+	MiNoteCleanupRule,
+	MiNoteCleanupState,
 	MiClipNote,
 	MiClipFavorite,
 	MiAntenna,
