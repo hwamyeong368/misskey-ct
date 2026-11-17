@@ -71,10 +71,12 @@ import { packedUserWebhookSchema } from '@/models/json-schema/user-webhook.js';
 import { packedSystemWebhookSchema } from '@/models/json-schema/system-webhook.js';
 import { packedAbuseReportNotificationRecipientSchema } from '@/models/json-schema/abuse-report-notification-recipient.js';
 import { packedChatMessageSchema, packedChatMessageLiteSchema, packedChatMessageLiteForRoomSchema, packedChatMessageLiteFor1on1Schema } from '@/models/json-schema/chat-message.js';
+import { packedChatRoomChannelSchema } from '@/models/json-schema/chat-room-channel.js';
 import { packedChatRoomSchema } from '@/models/json-schema/chat-room.js';
 import { packedChatRoomInvitationSchema } from '@/models/json-schema/chat-room-invitation.js';
-import { packedChatRoomVoiceStateSchema } from '@/models/json-schema/chat-room-voice-state.js';
 import { packedChatRoomMembershipSchema } from '@/models/json-schema/chat-room-membership.js';
+import { packedChatRoomBanSchema } from '@/models/json-schema/chat-room-ban.js';
+import { packedChatRoomVoiceStateSchema } from '@/models/json-schema/chat-room-voice-state.js';
 import { packedAchievementNameSchema, packedAchievementSchema } from '@/models/json-schema/achievement.js';
 import { packedNoteDraftSchema } from '@/models/json-schema/note-draft.js';
 
@@ -148,9 +150,11 @@ export const refs = {
 	ChatMessageLiteFor1on1: packedChatMessageLiteFor1on1Schema,
 	ChatMessageLiteForRoom: packedChatMessageLiteForRoomSchema,
 	ChatRoom: packedChatRoomSchema,
+	ChatRoomChannel: packedChatRoomChannelSchema,
 	ChatRoomInvitation: packedChatRoomInvitationSchema,
-	ChatRoomVoiceState: packedChatRoomVoiceStateSchema,
 	ChatRoomMembership: packedChatRoomMembershipSchema,
+	ChatRoomBan: packedChatRoomBanSchema,
+	ChatRoomVoiceState: packedChatRoomVoiceStateSchema,
 };
 
 export type Packed<x extends keyof typeof refs> = SchemaType<typeof refs[x]>;

@@ -219,6 +219,15 @@ export class ApRequestService {
 	 * @param user http-signature user
 	 * @param url URL to fetch
 	 */
+	/** 초코픽: 서명한 GET으로 JSON을 받는다(초대 링크 미리 보기 등). */
+	@bindThis
+	public async signedGetJson(user: { id: MiUser['id'] }, url: string, timeout: number, options: { redirect?: 'follow' | 'manual'; size?: number } = {}): Promise<unknown> {
+		const keypair = await this.userKeypairService.getUserKeypair(user.id);
+		const req = await ApRequestCreator.createSignedGet({ key: { privateKeyPem: keypair.privateKey, keyId: `${this.config.url}/users/${user.id}#main-key` }, url, additionalHeaders: {} });
+		const res = await this.httpRequestService.send(url, { method: 'GET', headers: req.request.headers, timeout, redirect: options.redirect, size: options.size }, { throwErrorWhenResponseNotOk: true });
+		return await res.json();
+	}
+
 	@bindThis
 	public async signedGet(url: string, user: { id: MiUser['id'] }, allowSoftfail: FetchAllowSoftFailMask = FetchAllowSoftFailMask.Strict, followAlternate?: boolean): Promise<unknown> {
 		const _followAlternate = followAlternate ?? true;

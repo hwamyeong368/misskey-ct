@@ -13,11 +13,19 @@ export interface IObject {
 	name?: string | null;
 	summary?: string;
 	_misskey_summary?: string;
+	_misskey_chatChannels?: unknown;
+	_misskey_chatIconDecorations?: unknown;
+	_misskey_chatLegacyChannel?: unknown;
+	_misskey_chatChannel?: unknown;
+	_misskey_chatChannelRefs?: unknown;
 	_misskey_chatArchived?: boolean;
 	allowRecording?: boolean;
 	_misskey_chatRoom?: string;
 	_misskey_chatRoomMembers?: string[];
 	_misskey_chatRoomRosterAt?: string;
+	_misskey_chatAuthor?: unknown;
+	_misskey_chatAuthorArchived?: boolean;
+	_misskey_chatReactions?: unknown;
 	_misskey_followedMessage?: string | null;
 	_misskey_requireSigninToViewContents?: boolean;
 	_misskey_makeNotesFollowersOnlyBefore?: number | null;
@@ -367,6 +375,10 @@ export interface IMove extends IActivity {
 	target: IObject | string;
 }
 
+export interface IJoin extends IActivity {
+	type: 'Join';
+}
+
 /**
  * arti: the participants of a room's voice call. The server that owns the room sends it
  * as an Update from the owner to the members on other servers.
@@ -398,4 +410,5 @@ export const isAnnounce = (object: IObject): object is IAnnounce => getApType(ob
 export const isBlock = (object: IObject): object is IBlock => getApType(object) === 'Block';
 export const isFlag = (object: IObject): object is IFlag => getApType(object) === 'Flag';
 export const isMove = (object: IObject): object is IMove => getApType(object) === 'Move';
+export const isJoin = (object: IObject): object is IJoin => getApType(object) === 'Join';
 export const isNote = (object: IObject): object is IPost => getApType(object) === 'Note';

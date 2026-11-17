@@ -64,11 +64,28 @@ export type DbJobMap = {
 	deleteAccount: DbUserDeleteJobData;
 	truncateAccount: DbUserTruncateJobData;
 	truncateAccountKeepDrive: DbUserTruncateJobData;
+	chatChannelDeliver: ChatChannelDeliverJobData;
 	chatRoomRosterSync: ChatRoomRosterSyncJobData;
+	chatRoomIconDeleted: { roomId: string; fileId: string };
+	chatRoomHistorySync: ChatRoomHistorySyncJobData;
+};
+
+export type ChatChannelDeliverJobData = {
+	user: ThinUser;
+	content: IActivity;
+	to: string;
+	isSharedInbox: boolean;
+	host: string;
 };
 
 export type ChatRoomRosterSyncJobData = {
 	roomId: string;
+	retryFutureChannels?: boolean;
+};
+
+export type ChatRoomHistorySyncJobData = {
+	roomId: string;
+	pass?: number;
 };
 
 export type DbJobDataWithUser = {

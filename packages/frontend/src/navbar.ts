@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { computed, reactive } from 'vue';
+import { computed, reactive, unref } from 'vue';
 import { ui } from '@@/js/config.js';
 import { clearCache } from './utility/clear-cache.js';
 import type { ComputedRef } from 'vue';
@@ -21,6 +21,7 @@ export const navbarItemDef = reactive<{
 		icon: string;
 		show?: ComputedRef<boolean>;
 		indicated?: ComputedRef<boolean>;
+		pulsing?: ComputedRef<boolean>;
 		indicateValue?: ComputedRef<string>;
 		to?: string;
 		action?: (ev: PointerEvent) => void;
@@ -132,7 +133,8 @@ export const navbarItemDef = reactive<{
 		icon: 'ti ti-messages',
 		to: '/chat',
 		show: computed(() => $i != null && $i.policies.chatAvailability !== 'unavailable'),
-		indicated: computed(() => $i != null && $i.hasUnreadChatMessages),
+		indicated: computed(() => $i?.hasUnreadChatMessages ?? false),
+		pulsing: computed(() => $i?.hasUnreadChatNotifications ?? $i?.hasUnreadChatMessages ?? false),
 	},
 	achievements: {
 		title: i18n.ts.achievements,
@@ -201,3 +203,8 @@ export const navbarItemDef = reactive<{
 		},
 	},
 });
+
+/** 미읽음 표시를 깜빡일지 정한다. 항목이 따로 정하지 않으면 기존처럼 깜빡인다. */
+export function isNavbarItemPulsing(item: { pulsing?: ComputedRef<boolean> | boolean }): boolean {
+	return unref(item.pulsing) !== false;
+}

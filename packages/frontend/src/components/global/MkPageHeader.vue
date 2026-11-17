@@ -16,6 +16,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div v-if="pageMetadata.avatar" :class="$style.titleAvatarContainer">
 					<MkAvatar :class="$style.titleAvatar" :user="pageMetadata.avatar" indicator/>
 				</div>
+				<div v-else-if="pageMetadata.roomAvatar" :class="$style.titleAvatarContainer">
+					<MkAvatar :class="$style.titleAvatar" :room="pageMetadata.roomAvatar"/>
+				</div>
 				<i v-else-if="pageMetadata.icon" :class="[$style.titleIcon, pageMetadata.icon]"></i>
 
 				<div class="_nowrap" :class="$style.title">
@@ -60,6 +63,7 @@ export type PageHeaderProps = {
 	icon?: string;
 	/** 戻るとアプリの外へ出てしまうときの、戻るボタンの移動先 */
 	backFallback?: string;
+	backTo?: string;
 };
 </script>
 
@@ -132,6 +136,11 @@ function onTabClick(): void {
 
 function goBack() {
 	haptic();
+
+	if (props.backTo != null) {
+		mainRouter.pushByPath(props.backTo);
+		return;
+	}
 
 	if (props.backFallback != null && !canGoBackInApp()) {
 		mainRouter.pushByPath(props.backFallback);

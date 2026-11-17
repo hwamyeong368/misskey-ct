@@ -566,6 +566,14 @@ const extension_context_definition = {
 		'@type': 'schema:text',
 	},
 	'_misskey_dice': { '@id': 'misskey:_misskey_dice', '@type': '@json' },
+	'_misskey_chatChannels': { '@id': 'misskey:_misskey_chatChannels', '@type': '@json' },
+	'_misskey_chatIconDecorations': { '@id': 'misskey:_misskey_chatIconDecorations', '@type': '@json' },
+	'_misskey_chatLegacyChannel': { '@id': 'misskey:_misskey_chatLegacyChannel', '@type': '@id' },
+	'_misskey_chatChannel': { '@id': 'misskey:_misskey_chatChannel', '@type': '@id' },
+	'_misskey_chatChannelRefs': { '@id': 'misskey:_misskey_chatChannelRefs', '@type': '@json' },
+	'_misskey_chatAuthor': { '@id': 'misskey:_misskey_chatAuthor', '@type': '@json' },
+	'_misskey_chatAuthorArchived': 'misskey:_misskey_chatAuthorArchived',
+	'_misskey_chatReactions': { '@id': 'misskey:_misskey_chatReactions', '@type': '@json' },
 	'_misskey_chatRoom': 'misskey:_misskey_chatRoom',
 	'_misskey_chatScope': 'misskey:_misskey_chatScope',
 	'_misskey_chatArchived': 'misskey:_misskey_chatArchived',
@@ -573,6 +581,8 @@ const extension_context_definition = {
 	'_misskey_chatRoomRosterAt': 'misskey:_misskey_chatRoomRosterAt',
 	// 초코픽(cherrypick): 방 주인이 통화 녹화를 허락했는지
 	allowRecording: 'https://kokonect.link/ns#allowRecording',
+	'_misskey_chatRoomMembersCount': 'misskey:_misskey_chatRoomMembersCount',
+	'_misskey_chatJoinRefusal': 'misskey:_misskey_chatJoinRefusal',
 	'isCat': 'misskey:isCat',
 	// vcard
 	vcard: 'http://www.w3.org/2006/vcard/ns#',

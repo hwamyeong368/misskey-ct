@@ -5,6 +5,7 @@
 
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import * as Redis from 'ioredis';
+import { In } from 'typeorm';
 import type { AvatarDecorationsRepository, MiAvatarDecoration, MiUser } from '@/models/_.js';
 import { IdService } from '@/core/IdService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
@@ -13,12 +14,20 @@ import { bindThis } from '@/decorators.js';
 import { MemorySingleCache } from '@/misc/cache.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { appendQuery, query } from '@/misc/prelude/url.js';
+import type { Config } from '@/config.js';
+import { normalizeAvatarDecoration } from '@/core/avatar-decoration.js';
+import { checkHttps } from '@/misc/check-https.js';
+import { isStorableText } from '@/core/chat-room-channels.js';
 
 @Injectable()
 export class AvatarDecorationService implements OnApplicationShutdown {
 	public cache: MemorySingleCache<MiAvatarDecoration[]>;
 
 	constructor(
+		@Inject(DI.config)
+		private config: Config,
+
 		@Inject(DI.redisForSub)
 		private redisForSub: Redis.Redis,
 
@@ -92,6 +101,67 @@ export class AvatarDecorationService implements OnApplicationShutdown {
 				after: updated,
 			});
 		}
+	}
+
+	@bindThis
+	public getProxiedUrl(url: string, mode?: 'static' | 'avatar'): string {
+		return appendQuery(
+			`${this.config.mediaProxy}/${mode ?? 'image'}.webp`,
+			query({
+				url,
+				...(mode ? { [mode]: '1' } : {}),
+			}),
+		);
+	}
+
+	/**
+	 * 그룹처럼 방금 만든 장식을 바로 보여 주어야 하는 곳에서 쓴다.
+	 * getAll의 캐시는 다른 프로세스가 만든 장식을 몰라서 캐시를 거치지 않고 id로 직접 읽는다.
+	 */
+	@bindThis
+	public async findByIds(ids: MiAvatarDecoration['id'][]): Promise<MiAvatarDecoration[]> {
+		if (ids.length === 0) return [];
+		return this.avatarDecorationsRepository.findBy({ id: In(ids) });
+	}
+
+	/**
+	 * CT: 다른 서버 장식은 RemoteAvatarDecorationService처럼 원본 주소(url)를 항목에 그대로 담아 두므로,
+	 * url이 있는 항목은 프록시 주소로, 없는 항목은 이 서버의 장식으로 푼다.
+	 */
+	@bindThis
+	public async pack(used: MiUser['avatarDecorations']) {
+		if (used.length === 0) return [];
+		const decorations = await this.findByIds(used.filter(d => d.url == null).map(d => d.id));
+		return used.flatMap(d => {
+			const url = d.url != null ? this.getProxiedUrl(d.url, 'avatar') : decorations.find(item => item.id === d.id)?.url;
+			return url == null ? [] : [{
+				id: d.id, angle: d.angle || undefined, flipH: d.flipH || undefined,
+				offsetX: d.offsetX || undefined, offsetY: d.offsetY || undefined,
+				scale: d.scale || undefined, opacity: d.opacity || undefined, url,
+			}];
+		});
+	}
+
+	/** CT: 다른 서버 그룹 아이콘의 장식은 DB에 등록하지 않고 원본 주소를 항목에 담아 둔다. */
+	@bindThis
+	public async resolveChatDecorations(host: string, value: unknown): Promise<MiUser['avatarDecorations'] | undefined> {
+		if (!Array.isArray(value) || value.length > 16) return undefined;
+		const result: MiUser['avatarDecorations'] = [];
+		for (const item of value) {
+			if (item == null || typeof item !== 'object' || typeof item.id !== 'string' || item.id.length === 0 || item.id.length > 32 || !isStorableText(item.id)) continue;
+			if (typeof item.url !== 'string' || item.url.length > 4096 || !isStorableText(item.url) || !checkHttps(item.url)) continue;
+			try {
+				const url = new URL(item.url);
+				if (url.username || url.password || this.getProxiedUrl(item.url, 'avatar').length > 1024) continue;
+			} catch {
+				continue;
+			}
+			if (item.flipH != null && typeof item.flipH !== 'boolean') continue;
+			const ranges = { angle: [-0.5, 0.5], offsetX: [-0.25, 0.25], offsetY: [-0.25, 0.25], scale: [0.5, 1.5], opacity: [0.1, 1] };
+			if (Object.entries(ranges).some(([key, [min, max]]) => item[key] != null && (typeof item[key] !== 'number' || !Number.isFinite(item[key]) || item[key] < min || item[key] > max))) continue;
+			result.push({ ...normalizeAvatarDecoration({ id: item.id, angle: item.angle, flipH: item.flipH, offsetX: item.offsetX, offsetY: item.offsetY, scale: item.scale, opacity: item.opacity }), url: item.url });
+		}
+		return result;
 	}
 
 	@bindThis

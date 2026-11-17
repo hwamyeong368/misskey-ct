@@ -87,10 +87,15 @@ import {
 	MiKyunetTranslation,
 	MiWebhook,
 	MiChatMessage,
+	MiChatRoomChannel,
+	MiChatRoomInviteLink,
+	MiChatRoomUserSettings,
 	MiChatRoom,
 	MiChatRoomMembership,
 	MiChatRoomRosterState,
+	MiChatRoomHistoryState,
 	MiChatRoomInvitation,
+	MiChatRoomBan,
 	MiChatApproval,
 } from './_.js';
 import type { Provider } from '@nestjs/common';
@@ -552,6 +557,24 @@ const $chatMessagesRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $chatRoomUserSettingsRepository: Provider = {
+	provide: DI.chatRoomUserSettingsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiChatRoomUserSettings).extend(miRepository as MiRepository<MiChatRoomUserSettings>),
+	inject: [DI.db],
+};
+
+const $chatRoomChannelsRepository: Provider = {
+	provide: DI.chatRoomChannelsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiChatRoomChannel).extend(miRepository as MiRepository<MiChatRoomChannel>),
+	inject: [DI.db],
+};
+
+const $chatRoomInviteLinksRepository: Provider = {
+	provide: DI.chatRoomInviteLinksRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiChatRoomInviteLink).extend(miRepository as MiRepository<MiChatRoomInviteLink>),
+	inject: [DI.db],
+};
+
 const $chatRoomsRepository: Provider = {
 	provide: DI.chatRoomsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiChatRoom).extend(miRepository as MiRepository<MiChatRoom>),
@@ -570,9 +593,21 @@ const $chatRoomRosterStatesRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $chatRoomHistoryStatesRepository: Provider = {
+	provide: DI.chatRoomHistoryStatesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiChatRoomHistoryState).extend(miRepository as MiRepository<MiChatRoomHistoryState>),
+	inject: [DI.db],
+};
+
 const $chatRoomInvitationsRepository: Provider = {
 	provide: DI.chatRoomInvitationsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiChatRoomInvitation).extend(miRepository as MiRepository<MiChatRoomInvitation>),
+	inject: [DI.db],
+};
+
+const $chatRoomBansRepository: Provider = {
+	provide: DI.chatRoomBansRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiChatRoomBan).extend(miRepository as MiRepository<MiChatRoomBan>),
 	inject: [DI.db],
 };
 
@@ -673,10 +708,15 @@ const $reversiGamesRepository: Provider = {
 		$flashLikesRepository,
 		$userMemosRepository,
 		$chatMessagesRepository,
+		$chatRoomChannelsRepository,
+		$chatRoomInviteLinksRepository,
+		$chatRoomUserSettingsRepository,
 		$chatRoomsRepository,
 		$chatRoomMembershipsRepository,
 		$chatRoomRosterStatesRepository,
+		$chatRoomHistoryStatesRepository,
 		$chatRoomInvitationsRepository,
+		$chatRoomBansRepository,
 		$chatApprovalsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
@@ -758,10 +798,15 @@ const $reversiGamesRepository: Provider = {
 		$flashLikesRepository,
 		$userMemosRepository,
 		$chatMessagesRepository,
+		$chatRoomChannelsRepository,
+		$chatRoomInviteLinksRepository,
+		$chatRoomUserSettingsRepository,
 		$chatRoomsRepository,
 		$chatRoomMembershipsRepository,
 		$chatRoomRosterStatesRepository,
+		$chatRoomHistoryStatesRepository,
 		$chatRoomInvitationsRepository,
+		$chatRoomBansRepository,
 		$chatApprovalsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
