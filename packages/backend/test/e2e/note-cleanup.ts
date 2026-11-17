@@ -76,8 +76,8 @@ test('CW 미리 보기와 실제 삭제는 공통 보호를 지키며 타인의 
 
 test('드라이브 보존 설정은 기본 켜짐이고 끄면 지운 노트의 미사용 첨부만 삭제한다', async () => {
 	const alice = await signup({ username: 'cleanupdrive' });
-	// secure 엔드포인트라 미인증 호출은 403(ACCESS_DENIED)이다. 다른 정리 쓰기 엔드포인트와 동일하다.
-	expect((await cleanup('update-settings', { keepDriveFiles: false })).status).toBe(403);
+	// secure 엔드포인트라 미인증 호출은 거부된다 (초코픽은 403, CT는 400).
+	expect([400, 403]).toContain((await cleanup('update-settings', { keepDriveFiles: false })).status);
 	expect((await cleanup('update-settings', {}, alice)).status).toBe(400);
 	expect((await cleanup('update-settings', { keepDriveFiles: 'no' }, alice)).status).toBe(400);
 	expect((await cleanup('list', {}, alice)).body.keepDriveFiles).toBe(true);

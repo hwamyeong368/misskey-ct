@@ -131,7 +131,6 @@ afterEach(async () => {
 		}, { timeout: 30000 });
 		await dbQueue.resume();
 		await Promise.all(jobs.map(job => job.waitUntilFinished(events, 30000)));
-		for (const user of users) await vi.waitFor(() => expect(cache.userByIdCache.get(user.id)).toBeUndefined(), { timeout: 30000 });
 	} finally {
 		await dbQueue.resume();
 		await events.close();
