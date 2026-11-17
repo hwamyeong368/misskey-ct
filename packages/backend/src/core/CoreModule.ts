@@ -46,6 +46,8 @@ import { MetaService } from './MetaService.js';
 import { MfmService } from './MfmService.js';
 import { ModerationLogService } from './ModerationLogService.js';
 import { NoteCreateService } from './NoteCreateService.js';
+import { NoteCleanupService } from './NoteCleanupService.js';
+import { DriveFileUsageService } from './DriveFileUsageService.js';
 import { NoteDeleteService } from './NoteDeleteService.js';
 import { NotePiningService } from './NotePiningService.js';
 import { NoteUpdateService } from './NoteUpdateService.js';
@@ -214,6 +216,7 @@ const $ModerationLogService: Provider = { provide: 'ModerationLogService', useEx
 const $NoteCreateService: Provider = { provide: 'NoteCreateService', useExisting: NoteCreateService };
 const $NoteDeleteService: Provider = { provide: 'NoteDeleteService', useExisting: NoteDeleteService };
 const $NotePiningService: Provider = { provide: 'NotePiningService', useExisting: NotePiningService };
+const $DriveFileUsageService: Provider = { provide: 'DriveFileUsageService', useExisting: DriveFileUsageService };
 const $NoteUpdateService: Provider = { provide: 'NoteUpdateService', useExisting: NoteUpdateService };
 const $NoteDraftService: Provider = { provide: 'NoteDraftService', useExisting: NoteDraftService };
 const $NoteInteractionPolicyService: Provider = { provide: 'NoteInteractionPolicyService', useExisting: NoteInteractionPolicyService };
@@ -385,6 +388,8 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		MfmService,
 		ModerationLogService,
 		NoteCreateService,
+		NoteCleanupService,
+		DriveFileUsageService,
 		NoteDeleteService,
 		NotePiningService,
 		NoteUpdateService,
@@ -558,6 +563,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		$NoteDeleteService,
 		$NotePiningService,
 		$NoteUpdateService,
+		$DriveFileUsageService,
 		$NoteDraftService,
 		$NoteInteractionPolicyService,
 		$NotificationService,
@@ -725,6 +731,8 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		MfmService,
 		ModerationLogService,
 		NoteCreateService,
+		NoteCleanupService,
+		DriveFileUsageService,
 		NoteDeleteService,
 		NotePiningService,
 		NoteUpdateService,
@@ -897,6 +905,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		$NoteDeleteService,
 		$NotePiningService,
 		$NoteUpdateService,
+		$DriveFileUsageService,
 		$NoteDraftService,
 		$NoteInteractionPolicyService,
 		$NotificationService,

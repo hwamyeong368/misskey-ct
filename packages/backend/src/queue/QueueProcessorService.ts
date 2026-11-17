@@ -187,6 +187,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 					case 'clean': return this.cleanProcessorService.process();
 					case 'cleanRemoteNotes': return this.cleanRemoteNotesProcessorService.process(job);
 					case 'autoDeleteNotes': return runAsBulkDelivery(() => this.autoDeleteNotesProcessorService.process(job)); // bscone: low delivery priority
+					case 'autoDeleteNotesManual': return runAsBulkDelivery(() => this.autoDeleteNotesProcessorService.processManualRound());
 					default: throw new Error(`unrecognized job type ${job.name} for system`);
 				}
 			};

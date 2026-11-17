@@ -24,6 +24,8 @@ import {
 	MiChannelMuting,
 	MiClip,
 	MiClipFavorite,
+	MiNoteCleanupRule,
+	MiNoteCleanupState,
 	MiClipNote,
 	MiDriveFile,
 	MiDriveFolder,
@@ -407,6 +409,17 @@ const $clipsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $noteCleanupRulesRepository: Provider = {
+	provide: DI.noteCleanupRulesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiNoteCleanupRule).extend(miRepository as MiRepository<MiNoteCleanupRule>),
+	inject: [DI.db],
+};
+const $noteCleanupStatesRepository: Provider = {
+	provide: DI.noteCleanupStatesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiNoteCleanupState).extend(miRepository as MiRepository<MiNoteCleanupState>),
+	inject: [DI.db],
+};
+
 const $clipNotesRepository: Provider = {
 	provide: DI.clipNotesRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiClipNote).extend(miRepository as MiRepository<MiClipNote>),
@@ -636,6 +649,8 @@ const $reversiGamesRepository: Provider = {
 		$galleryLikesRepository,
 		$moderationLogsRepository,
 		$clipsRepository,
+		$noteCleanupRulesRepository,
+		$noteCleanupStatesRepository,
 		$clipNotesRepository,
 		$clipFavoritesRepository,
 		$antennasRepository,
@@ -719,6 +734,8 @@ const $reversiGamesRepository: Provider = {
 		$galleryLikesRepository,
 		$moderationLogsRepository,
 		$clipsRepository,
+		$noteCleanupRulesRepository,
+		$noteCleanupStatesRepository,
 		$clipNotesRepository,
 		$clipFavoritesRepository,
 		$antennasRepository,

@@ -32,6 +32,7 @@ import { MiChatRoomMembership } from '@/models/ChatRoomMembership.js';
 import { MiChatRoomRosterState } from '@/models/ChatRoomRosterState.js';
 import { MiClip } from '@/models/Clip.js';
 import { MiClipFavorite } from '@/models/ClipFavorite.js';
+import { MiNoteCleanupRule, MiNoteCleanupState } from '@/models/NoteCleanupRule.js';
 import { MiClipNote } from '@/models/ClipNote.js';
 import { MiDriveFile } from '@/models/DriveFile.js';
 import { MiDriveFolder } from '@/models/DriveFolder.js';
@@ -118,6 +119,8 @@ export {
 	MiChannelFavorite,
 	MiChannelMuting,
 	MiClip,
+	MiNoteCleanupRule,
+	MiNoteCleanupState,
 	MiClipNote,
 	MiClipFavorite,
 	MiDriveFile,
@@ -271,3 +274,5 @@ export type ChatRoomInvitationsRepository = Repository<MiChatRoomInvitation> & M
 export type ChatApprovalsRepository = Repository<MiChatApproval> & MiRepository<MiChatApproval>;
 export type BubbleGameRecordsRepository = Repository<MiBubbleGameRecord> & MiRepository<MiBubbleGameRecord>;
 export type ReversiGamesRepository = Repository<MiReversiGame> & MiRepository<MiReversiGame>;
+export type NoteCleanupRulesRepository = Repository<MiNoteCleanupRule> & MiRepository<MiNoteCleanupRule>;
+export type NoteCleanupStatesRepository = Repository<MiNoteCleanupState> & MiRepository<MiNoteCleanupState>;

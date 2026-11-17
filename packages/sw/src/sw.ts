@@ -181,6 +181,12 @@ globalThis.addEventListener('notificationclick', (ev: ServiceWorkerGlobalScopeEv
 							case 'reaction':
 								client = await swos.openNote(data.body.note.id, loginId);
 								break;
+							case 'noteCleanupCompleted':
+								client = await swos.openClient('push', '/settings/note-cleanup', loginId);
+								break;
+							case 'noteCleanupProtectionFailed':
+								client = await swos.openClient('push', `/settings/note-cleanup/${data.body.ruleId}`, loginId);
+								break;
 							default:
 								if ('note' in data.body) {
 									client = await swos.openNote(data.body.note.id, loginId);

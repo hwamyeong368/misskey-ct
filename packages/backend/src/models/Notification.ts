@@ -62,6 +62,17 @@ export type MiNotification = {
 	notifierId: MiUser['id'];
 	noteId: MiNote['id'];
 } | {
+	type: 'noteCleanupProtectionFailed';
+	id: string;
+	createdAt: string;
+	ruleId: string;
+	errorCode: string;
+} | {
+	type: 'noteCleanupCompleted';
+	id: string;
+	createdAt: string;
+	count: number;
+} | {
 	type: 'scheduledNotePosted';
 	id: string;
 	createdAt: string;

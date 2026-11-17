@@ -189,6 +189,8 @@ export class NotificationEntityService implements OnModuleInit {
 				exportedEntity: notification.exportedEntity,
 				fileId: notification.fileId,
 			} : {}),
+			...(notification.type === 'noteCleanupProtectionFailed' ? { ruleId: notification.ruleId, errorCode: notification.errorCode } : {}),
+			...(notification.type === 'noteCleanupCompleted' ? { count: notification.count } : {}),
 			...(notification.type === 'app' ? {
 				body: notification.customBody,
 				header: notification.customHeader,

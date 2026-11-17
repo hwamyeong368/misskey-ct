@@ -2,169 +2,131 @@
  * SPDX-FileCopyrightText: syuilo and misskey-project
  * SPDX-License-Identifier: AGPL-3.0-only
  */
-
-import { Inject, Injectable } from '@nestjs/common';
-import { IsNull, LessThan, Not, In, Raw } from 'typeorm';
-import { DI } from '@/di-symbols.js';
-import type { NotesRepository, UsersRepository, DriveFilesRepository } from '@/models/_.js';
-import type Logger from '@/logger.js';
+import { Injectable } from '@nestjs/common';
+import * as Bull from 'bullmq';
+import { isCleanupBusyError, NOTE_CLEANUP_LIMITS, NoteCleanupService } from '@/core/NoteCleanupService.js';
+import { QueueService } from '@/core/QueueService.js';
+import Logger from '@/logger.js';
 import { bindThis } from '@/decorators.js';
-import { IdService } from '@/core/IdService.js';
-import { DriveService } from '@/core/DriveService.js';
-import { NoteDeleteService } from '@/core/NoteDeleteService.js';
-import { QueueLoggerService } from '../QueueLoggerService.js';
-import type * as Bull from 'bullmq';
+import { isRetryableCleanupFailure } from '@/core/NoteCleanupRunner.js';
 
 @Injectable()
 export class AutoDeleteNotesProcessorService {
-	private logger: Logger;
+	private logger = new Logger('note-cleanup');
+	constructor(private noteCleanupService: NoteCleanupService, private queueService: QueueService) {}
 
-	constructor(
-		@Inject(DI.usersRepository)
-		private usersRepository: UsersRepository,
-
-		@Inject(DI.notesRepository)
-		private notesRepository: NotesRepository,
-
-		@Inject(DI.driveFilesRepository)
-		private driveFilesRepository: DriveFilesRepository,
-
-		private idService: IdService,
-		private driveService: DriveService,
-		private noteDeleteService: NoteDeleteService,
-		private queueLoggerService: QueueLoggerService,
-	) {
-		this.logger = this.queueLoggerService.logger.createSubLogger('auto-delete-notes');
+	// 전송과 수신이 밀렸으면 연합 삭제 부하를 더하지 않는다. 수동 요청과 자동 회차가 같은 기준을 쓴다.
+	private async backlogged() {
+		for (const [queue, threshold] of [[this.queueService.deliverQueue, 10000], [this.queueService.inboxQueue, 5000]] as const) {
+			const oldest = (await queue.getWaiting(0, 0))[0];
+			if (oldest && Date.now() - oldest.timestamp > threshold) return true;
+		}
+		return false;
 	}
 
 	@bindThis
-	public async process(job: Bull.Job<Record<string, unknown>>): Promise<{
-		deletedCount: number;
-		processedUsers: number;
-	}> {
-		this.logger.info('Starting auto-delete notes process...');
+	public async process(job: Bull.Job<Record<string, unknown>>) {
+		const { userId, manual } = job.data;
+		if (manual === true && typeof userId === 'string') return this.runManual(userId, Date.now());
+		return this.automaticRound();
+	}
 
-		const stats = {
-			deletedCount: 0,
-			processedUsers: 0,
-		};
-
-		// autoDeleteNotesAfterDays가 설정된 유저 찾기
-		const usersWithAutoDelete = await this.usersRepository.findBy({
-			autoDeleteNotesAfterDays: Not(IsNull()),
-		});
-
-		if (usersWithAutoDelete.length === 0) {
-			this.logger.info('No users with auto-delete settings found.');
-			return stats;
+	// 수동 요청 이어 처리 전용 회차(1분): 접수된 요청의 재시도가 5분 자동 회차에 묶이지 않게 한다.
+	// 자동 검사는 건드리지 않으며, 적체·혼잡 건너뛰기와 계정별 대기 계약은 자동 회차와 같다.
+	@bindThis
+	public async processManualRound() {
+		try {
+			return await this.noteCleanupService.locked('scheduler', () => this.runManualRound());
+		} catch (error) {
+			if (isCleanupBusyError(error)) return { deletedCount: 0, skipped: true };
+			throw error;
 		}
+	}
 
-		this.logger.info(`Found ${usersWithAutoDelete.length} users with auto-delete settings.`);
+	private async runManualRound() {
+		if (await this.backlogged()) return { deletedCount: 0, skipped: true };
+		const { deletedCount } = await this.runManualUsers(Date.now());
+		return { deletedCount, skipped: false };
+	}
 
-		// 각 유저별로 처리
-		for (const user of usersWithAutoDelete) {
+	// 자동 회차: 수동 대기 계정을 먼저 처리하고 남은 계정 몫만 자동 검사에 쓴다. 회차 사용자·시간 상한은 함께 나눈다.
+	private async automaticRound() {
+		try {
+			return await this.noteCleanupService.locked('scheduler', () => this.runRound());
+		} catch (error) {
+			// 이전 회차가 아직 진행 중이거나 정리 연결이 모두 쓰이는 중이면 정상 혼잡이므로 이번 회차를 건너뛴다.
+			if (isCleanupBusyError(error)) return { deletedCount: 0, skipped: true };
+			throw error;
+		}
+	}
+
+	private async runRound() {
+		if (await this.backlogged()) return { deletedCount: 0, skipped: true };
+		const started = Date.now();
+		const manual = await this.runManualUsers(started);
+		let deletedCount = manual.deletedCount;
+		const remaining = NOTE_CLEANUP_LIMITS.roundUsers - manual.count;
+		const automatic = !manual.globalExhausted && remaining > 0 ? await this.noteCleanupService.automaticUsers(remaining) : [];
+		for (const id of automatic) {
+			if (Date.now() - started >= NOTE_CLEANUP_LIMITS.roundMs) break;
 			try {
-				const days = user.autoDeleteNotesAfterDays;
-				if (days === null || days <= 0) continue;
-
-				// 삭제 기준 날짜 계산
-				const deleteBeforeDate = new Date(Date.now() - (days * 24 * 60 * 60 * 1000));
-				const deleteBeforeId = this.idService.gen(deleteBeforeDate.getTime());
-
-				this.logger.info(`Processing user ${user.id}: deleting notes older than ${days} days (before ${deleteBeforeDate.toISOString()})`);
-
-				// 삭제할 노트 찾기
-				const queryBuilder = this.notesRepository.createQueryBuilder('note')
-					.where('note.userId = :userId', { userId: user.id })
-					.andWhere('note.id < :deleteBeforeId', { deleteBeforeId });
-
-				// 즐겨찾기 보호 설정이 켜져 있으면 즐겨찾기된 노트 제외
-				if (user.autoDeleteKeepFavorites) {
-					// bscone: only the owner's own favorites protect a note
-					queryBuilder.andWhere('NOT EXISTS (SELECT 1 FROM note_favorite WHERE "noteId" = note.id AND "userId" = :userId)', { userId: user.id });
-				}
-
-				const notesToDelete = await queryBuilder
-					.limit(1000) // 한 번에 최대 1000개씩 처리
-					.getMany();
-
-				if (notesToDelete.length > 0) {
-					const noteIds = notesToDelete.map(note => note.id);
-
-					// 드라이브 파일 삭제가 필요한 경우
-					if (!user.autoDeleteKeepDriveFiles) {
-						// 모든 노트의 fileIds를 수집
-						const allFileIds = notesToDelete
-							.flatMap(note => note.fileIds)
-							.filter(fileId => fileId != null);
-
-						if (allFileIds.length > 0) {
-							try {
-								// 각 파일이 다른 노트에서도 사용 중인지 확인 후 삭제
-								const uniqueFileIds = [...new Set(allFileIds)];
-								let deletedFilesCount = 0;
-
-								for (const fileId of uniqueFileIds) {
-									// 이 파일이 삭제 예정이 아닌 다른 노트에서도 사용되는지 확인
-									const usageCount = await this.notesRepository.count({
-										where: {
-											userId: user.id,
-											fileIds: Raw(alias => `${alias} @> ARRAY[:fileId]::varchar[]`, { fileId }),
-											id: Not(In(noteIds)), // 삭제 대상이 아닌 노트에서
-										},
-									});
-
-									// 다른 노트에서 사용하지 않는 파일만 삭제
-									if (usageCount === 0) {
-										try {
-											const file = await this.driveFilesRepository.findOneBy({
-												id: fileId,
-												userId: user.id,
-											});
-
-											if (file) {
-												await this.driveService.deleteFile(file);
-												deletedFilesCount++;
-											}
-										} catch (fileError) {
-											this.logger.error(`Failed to delete file ${fileId}: ${fileError}`);
-										}
-									} else {
-										this.logger.info(`Skipping file ${fileId} (used by ${usageCount} other notes)`);
-									}
-								}
-
-								this.logger.info(`Deleted ${deletedFilesCount} drive files for user ${user.id}`);
-							} catch (fileError) {
-								this.logger.error(`Error deleting files for user ${user.id}: ${fileError}`);
-							}
-						}
-					}
-
-					// NoteDeleteService를 사용하여 노트 삭제 (통계, 이벤트, 검색 인덱스, 연합 업데이트)
-					for (const note of notesToDelete) {
-						try {
-							await this.noteDeleteService.delete(user, note, false); // quiet=false로 연합에도 반영
-						} catch (noteError) {
-							this.logger.error(`Failed to delete note ${note.id}: ${noteError}`);
-						}
-					}
-
-					stats.deletedCount += notesToDelete.length;
-					this.logger.info(`Deleted ${notesToDelete.length} notes for user ${user.id}`);
-				} else {
-					this.logger.info(`No notes to delete for user ${user.id}`);
-				}
-
-				stats.processedUsers++;
+				const result = await this.noteCleanupService.processUser(id);
+				deletedCount += result.deleted;
+				if (result.throttled === 'global') break;
 			} catch (error) {
-				this.logger.error(`Error processing user ${user.id}: ${error}`);
-				// 한 유저의 에러가 전체 프로세스를 막지 않도록 계속 진행
+				// 한 계정의 잠금 충돌이나 자료 실패가 같은 회차의 다른 계정을 멈추지 않게 하고, 순번을 뒤로 보낸다.
+				if (!isCleanupBusyError(error)) this.logger.error('Automatic note cleanup failed', { userId: id, error });
+				try { await this.noteCleanupService.deferUser(id); } catch (deferError) { this.logger.error('Cleanup turn deferral failed', { userId: id, error: deferError }); }
 			}
 		}
+		return { deletedCount, skipped: false };
+	}
 
-		this.logger.succ(`Auto-delete notes process completed. Processed ${stats.processedUsers} users, deleted ${stats.deletedCount} notes.`);
+	// 수동 대기 계정을 먼저 처리한다. 회차 시간을 넘기거나 전역 예산이 차면 남은 계정은 다음 회차로 넘긴다.
+	private async runManualUsers(started: number): Promise<{ deletedCount: number; globalExhausted: boolean; count: number }> {
+		const manual = await this.noteCleanupService.manualUsers();
+		let deletedCount = 0;
+		let globalExhausted = false;
+		for (const id of manual) {
+			// system 큐를 오래 점유하지 않도록 회차 시간을 넘기면 남은 계정은 다음 회차로 넘긴다.
+			if (Date.now() - started >= NOTE_CLEANUP_LIMITS.roundMs) break;
+			try {
+				const result = await this.runManual(id, started);
+				deletedCount += result.deleted;
+				// 전역 예산이 다 찼으면 뒤 계정도 처리할 수 없으므로 검사 예산을 더 쓰지 않는다.
+				if (result.throttled === 'global') { globalExhausted = true; break; }
+			} catch (error) {
+				// 한 계정의 종료 실패가 같은 회차의 다른 계정을 멈추지 않게 하고, 순번을 뒤로 보낸다.
+				this.logger.error('Manual note cleanup failed in round', { userId: id, error });
+				try { await this.noteCleanupService.deferUser(id); } catch (deferError) { this.logger.error('Cleanup turn deferral failed', { userId: id, error: deferError }); }
+			}
+		}
+		return { deletedCount, globalExhausted, count: manual.length };
+	}
 
-		return stats;
+	// 수동 요청의 깨우기 작업: 마커를 따라 완료까지 페이지를 잇는다. 대기는 자식 작업 없이 정상 종료해 마커를 다음 회차에 넘긴다.
+	// 잠금 충돌·일시 실패·예산 대기는 모두 마커가 보존하는 대기이며, 비재시도 오류만 종료 실패로 처리한다.
+	private async runManual(userId: string, started: number): Promise<{ deleted: number; failed: number; delayed?: boolean; throttled?: 'global' | 'account' }> {
+		let deleted = 0;
+		let failed = 0;
+		for (;;) {
+			if (await this.backlogged()) return { delayed: true, deleted, failed };
+			let result;
+			try {
+				result = await this.noteCleanupService.continueManual(userId);
+			} catch (error) {
+				if (isCleanupBusyError(error)) return { delayed: true, deleted, failed };
+				if (isRetryableCleanupFailure(error)) {
+					this.logger.error('Manual note cleanup temporarily failed', { userId, error });
+					return { delayed: true, deleted, failed };
+				}
+				this.logger.error('Manual note cleanup failed permanently', { userId, error });
+				throw new Bull.UnrecoverableError(error instanceof Error ? error.message : String(error));
+			}
+			deleted += result.deleted;
+			failed += result.failed;
+			if (result.complete) return { deleted, failed };
+			if (result.throttled || Date.now() - started >= NOTE_CLEANUP_LIMITS.roundMs) return { delayed: true, deleted, failed, throttled: result.throttled };
+		}
 	}
 }

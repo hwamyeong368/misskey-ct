@@ -13,6 +13,7 @@ export const DI = {
 	redisForSub: Symbol('redisForSub'),
 	redisForTimelines: Symbol('redisForTimelines'),
 	redisForReactions: Symbol('redisForReactions'),
+	redisForJobQueue: Symbol('redisForJobQueue'),
 
 	//#region Repositories
 	usersRepository: Symbol('usersRepository'),
@@ -65,6 +66,8 @@ export const DI = {
 	galleryLikesRepository: Symbol('galleryLikesRepository'),
 	moderationLogsRepository: Symbol('moderationLogsRepository'),
 	clipsRepository: Symbol('clipsRepository'),
+	noteCleanupRulesRepository: Symbol('noteCleanupRulesRepository'),
+	noteCleanupStatesRepository: Symbol('noteCleanupStatesRepository'),
 	clipNotesRepository: Symbol('clipNotesRepository'),
 	clipFavoritesRepository: Symbol('clipFavoritesRepository'),
 	antennasRepository: Symbol('antennasRepository'),
