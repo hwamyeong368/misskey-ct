@@ -80,8 +80,8 @@ function fixture() {
 	};
 	const cleanup = new AutoDeleteNotesProcessorService({ locked: async (_id: unknown, work: () => Promise<unknown>) => work() } as any, { deliverQueue: { getWaiting: async () => [{ timestamp: 0 }] }, inboxQueue: { getWaiting: async () => [] }, systemQueue: { add: vi.fn(async () => {}), getJob: async () => null } } as any);
 	const other = { process: vi.fn() };
-	// CT의 QueueProcessorService는 config, 로거, 텔레메트리 다음에 처리기 38개, 자동 삭제 처리기, 원격 노트 정리 처리기 순서로 받는다.
-	const args = [{ redisForJobQueue: {}, outbox: {}, inbox: {} }, { logger }, telemetry, ...Array.from({ length: 38 }, () => other), cleanup, other];
+	// CT의 QueueProcessorService는 config, 로거, 텔레메트리 다음에 처리기 41개, 자동 삭제 처리기, 원격 노트 정리 처리기 순서로 받는다.
+	const args = [{ redisForJobQueue: {}, outbox: {}, inbox: {} }, { logger }, telemetry, ...Array.from({ length: 41 }, () => other), cleanup, other];
 	new (QueueProcessorService as any)(...args);
 	return { errors, captures, spans, other, cleanup, active: () => active, process: workers.get('system')! };
 }

@@ -288,6 +288,7 @@ export function alert(props: {
 export function confirm(props: {
 	type: 'error' | 'info' | 'success' | 'warning' | 'waiting' | 'question';
 	title?: string;
+	room?: Misskey.entities.ChatRoom;
 	text?: string;
 	okText?: string;
 	cancelText?: string;

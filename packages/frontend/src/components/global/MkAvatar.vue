@@ -4,11 +4,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<component :is="link ? MkA : 'span'" v-user-preview="preview ? user.id : undefined" v-bind="bound" class="_noSelect" :class="[$style.root, { [$style.animation]: animation, [$style.cat]: user.isCat, [$style.square]: squareAvatars }]" :style="{ color }" :title="acct(user)" @click.stop="onClick">
-	<MkImgWithBlurhash v-if="prefer.s.enableHighQualityImagePlaceholders" :class="$style.inner" :src="deidentified ? (instance.iconUrl || '/favicon.ico') : url" :hash="user.avatarBlurhash" :cover="true" :onlyAvgColor="true"/>
+<component :is="link && !room ? MkA : 'span'" v-user-preview="!room && user && preview ? user.id : undefined" v-bind="bound" class="_noSelect" :class="[$style.root, { [$style.animation]: animation, [$style.cat]: avatar.isCat, [$style.square]: squareAvatars }]" :style="{ color }" :title="room ? room.name : acct(user!)" @click.stop="onClick">
+	<MkImgWithBlurhash v-if="prefer.s.enableHighQualityImagePlaceholders" :class="$style.inner" :src="deidentified ? (instance.iconUrl || '/favicon.ico') : url" :hash="deidentified ? null : avatar.avatarBlurhash" :cover="true" :onlyAvgColor="true"/>
 	<img v-else :class="$style.inner" :src="deidentified ? (instance.iconUrl || '/favicon.ico') : url" alt="" decoding="async" style="pointer-events: none;"/>
-	<MkUserOnlineIndicator v-if="!deidentified && indicator" :class="$style.indicator" :user="user"/>
-	<div v-if="!deidentified && user.isCat" :class="[$style.ears]">
+	<MkUserOnlineIndicator v-if="!room && user && !deidentified && indicator" :class="$style.indicator" :user="user"/>
+	<div v-if="!deidentified && avatar.isCat" :class="[$style.ears]">
 		<div :class="$style.earLeft">
 			<div v-if="false" :class="$style.layer">
 				<div :class="$style.plot" :style="{ backgroundImage: `url(${JSON.stringify(url)})` }"></div>
@@ -55,6 +55,7 @@ import { acct, userPage } from '@@/js/user.js';
 import MkUserOnlineIndicator from '@/components/MkUserOnlineIndicator.vue';
 import { prefer } from '@/preferences.js';
 import { instance } from '@/instance.js';
+import { url as instanceUrl, host as instanceHost } from '@@/js/config.js';
 
 const animation = ref(prefer.s.animation);
 const squareAvatars = ref(prefer.s.squareAvatars);
@@ -63,7 +64,9 @@ type Decoration = Misskey.entities.UserDetailed['avatarDecorations'][number];
 type DecorationEditorDecoration = Omit<Misskey.entities.UserDetailed['avatarDecorations'][number], 'id'> & { blink?: boolean; };
 
 const props = withDefaults(defineProps<{
-	user: Misskey.entities.User;
+	user?: Misskey.entities.User;
+	// 그룹 아이콘: 그룹은 사용자처럼 아이콘과 장식을 가진다
+	room?: Pick<Misskey.entities.ChatRoom, 'id' | 'name' | 'iconUrl' | 'iconBlurhash' | 'iconDecorations'> & { owner: Pick<Misskey.entities.UserLite, 'host'> };
 	target?: string | null;
 	link?: boolean;
 	preview?: boolean;
@@ -71,6 +74,8 @@ const props = withDefaults(defineProps<{
 	decorations?: DecorationEditorDecoration[];
 	forceShowDecoration?: boolean;
 }>(), {
+	user: undefined,
+	room: undefined,
 	target: null,
 	link: false,
 	preview: false,
@@ -80,29 +85,36 @@ const props = withDefaults(defineProps<{
 });
 
 // bscone: de-identify muted users (isMuted only exists on UserDetailed)
-const deidentified = computed(() => prefer.s.deidentifyMutedUsers && 'isMuted' in props.user && props.user.isMuted === true);
+const deidentified = computed(() => !props.room && props.user != null && prefer.s.deidentifyMutedUsers && 'isMuted' in props.user && props.user.isMuted === true);
+
+const avatar = computed(() => props.room ? {
+	id: props.room.id, host: props.room.owner.host, isCat: false,
+	avatarUrl: props.room.iconUrl ?? `${instanceUrl}/identicon/${encodeURIComponent(props.room.id)}@${props.room.owner.host ?? instanceHost}`,
+	avatarBlurhash: props.room.iconBlurhash ?? null,
+	avatarDecorations: props.room.iconDecorations ?? [],
+} : props.user!);
 
 const emit = defineEmits<{
 	(ev: 'click', v: PointerEvent): void;
 }>();
 
 // bscone: react to avatar decoration mute toggles without a reload; remote users' decorations can be hidden separately
-const showDecoration = computed(() => (props.forceShowDecoration || (prefer.r.showAvatarDecorations.value && (props.user.host == null || prefer.r.showRemoteAvatarDecorations.value))) && !prefer.r.mutedAvatarDecorationUsers.value.includes(props.user.id));
+const showDecoration = computed(() => (props.forceShowDecoration || (prefer.r.showAvatarDecorations.value && (avatar.value.host == null || prefer.r.showRemoteAvatarDecorations.value))) && (props.room != null || !prefer.r.mutedAvatarDecorationUsers.value.includes(avatar.value.id)));
 
 // arti: hide decorations muted one by one (by image URL)
-const visibleUserDecorations = computed(() => props.user.avatarDecorations.filter(d => !prefer.r.mutedAvatarDecorations.value.includes(d.url)));
+const visibleUserDecorations = computed(() => avatar.value.avatarDecorations.filter(d => !prefer.r.mutedAvatarDecorations.value.includes(d.url)));
 
-const bound = computed(() => props.link
-	? { to: userPage(props.user), target: props.target }
+const bound = computed(() => props.link && !props.room
+	? { to: userPage(props.user!), target: props.target }
 	: {});
 
 const url = computed(() => {
-	if (prefer.s.disableShowingAnimatedImages || prefer.s.dataSaver.avatar) return getStaticImageUrl(props.user.avatarUrl);
-	return props.user.avatarUrl;
+	if (prefer.s.disableShowingAnimatedImages || prefer.s.dataSaver.avatar) return getStaticImageUrl(avatar.value.avatarUrl!);
+	return avatar.value.avatarUrl;
 });
 
 function onClick(ev: PointerEvent): void {
-	if (props.link) return;
+	if (props.link && !props.room) return;
 	emit('click', ev);
 }
 
@@ -145,9 +157,9 @@ function getDecorationOpacity(decoration: Decoration | DecorationEditorDecoratio
 
 const color = ref<string | undefined>();
 
-watch(() => props.user.avatarBlurhash, () => {
-	if (props.user.avatarBlurhash == null) return;
-	color.value = extractAvgColorFromBlurhash(props.user.avatarBlurhash);
+watch(() => avatar.value.avatarBlurhash, () => {
+	if (avatar.value.avatarBlurhash == null) return;
+	color.value = extractAvgColorFromBlurhash(avatar.value.avatarBlurhash);
 }, {
 	immediate: true,
 });

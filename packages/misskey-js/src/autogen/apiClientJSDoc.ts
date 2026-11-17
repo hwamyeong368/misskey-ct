@@ -1770,6 +1770,39 @@ declare module '../api.js' {
      * 
      * **Credential required**: *Yes* / **Permission**: *write:chat*
      */
+    request<E extends 'chat/invite-link/join', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
+     */
+    request<E extends 'chat/invite-link/join-status', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *No*
+     */
+    request<E extends 'chat/invite-link/show', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
     request<E extends 'chat/messages/create-to-room', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
@@ -1887,6 +1920,94 @@ declare module '../api.js' {
     ): Promise<SwitchCaseResponseType<E, P>>;
 
     /**
+     * Pardons an account the owner removed from the room. It can then be invited or join again, but it does not become a member, and nobody is invited or told.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/bans/delete', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * The accounts the owner removed from the room, which cannot join it again until pardoned. Only the owner can see them.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
+     */
+    request<E extends 'chat/rooms/bans/list', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/channels/create', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/channels/delete', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
+     */
+    request<E extends 'chat/rooms/channels/list', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/channels/reorder', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/channels/update', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/convert-to-channels', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
      * No description provided.
      * 
      * **Credential required**: *Yes* / **Permission**: *write:chat*
@@ -1979,6 +2100,39 @@ declare module '../api.js' {
      * 
      * **Credential required**: *Yes* / **Permission**: *write:chat*
      */
+    request<E extends 'chat/rooms/invite-link/create', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/invite-link/revoke', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
+     */
+    request<E extends 'chat/rooms/invite-link/show', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
     request<E extends 'chat/rooms/join', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
@@ -1997,7 +2151,7 @@ declare module '../api.js' {
     ): Promise<SwitchCaseResponseType<E, P>>;
 
     /**
-     * No description provided.
+     * Removes a member from a room you own. The account cannot join the room again until you pardon it with chat/rooms/bans/delete.
      * 
      * **Credential required**: *Yes* / **Permission**: *write:chat*
      */
@@ -2043,6 +2197,17 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/notifications', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *read:chat*
      */
     request<E extends 'chat/rooms/owned', P extends Endpoints[E]['req']>(
@@ -2054,9 +2219,31 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/read', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *read:chat*
      */
     request<E extends 'chat/rooms/show', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
+     */
+    request<E extends 'chat/rooms/unread', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,

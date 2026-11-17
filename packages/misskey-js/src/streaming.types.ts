@@ -52,6 +52,15 @@ export type Channels = {
 			notificationFlushed: () => void;
 			unreadAntenna: (payload: Antenna) => void;
 			newChatMessage: (payload: ChatMessage) => void;
+			chatRoomVoiceState: (payload: ChatRoomVoiceState) => void;
+			chatRoomListChanged: () => void;
+			chatInviteJoinResult: (payload: {
+				url: string;
+				status: 'joined' | 'invited' | 'refused';
+				roomId: string | null;
+				reason: 'revoked' | 'archived' | 'banned' | 'blocked' | 'full' | 'unknown' | null;
+			}) => void;
+			chatUnread: (payload: { hasUnreadChatMessages: boolean; hasUnreadChatNotifications: boolean; version: number }) => void;
 			readAllAnnouncements: () => void;
 			myTokenRegenerated: () => void;
 			signin: (payload: Signin) => void;
@@ -65,9 +74,6 @@ export type Channels = {
 			readAntenna: (payload: Antenna) => void;
 			receiveFollowRequest: (payload: User) => void;
 			announcementCreated: (payload: AnnouncementCreated) => void;
-			chatUnread: (payload: { hasUnreadChatMessages: boolean; version: number }) => void;
-			chatRoomVoiceState: (payload: ChatRoomVoiceState) => void;
-			chatRoomListChanged: () => void;
 		};
 		receives: null;
 	};
@@ -289,13 +295,18 @@ export type Channels = {
 	chatRoom: {
 		params: {
 			roomId: string;
+			channelId?: string;
 		};
 		events: {
+			channelsUpdated: (payload: { roomId: string }) => void;
+			channelMessage: (payload: { channelId: string; messageId: string }) => void;
 			message: (payload: ChatMessageLite) => void;
 			updated: (payload: {
 				messageId: ChatMessageLite['id'];
+				shouldNotify?: boolean;
 				text: string;
 				editedAt: string;
+				channelRefs?: { channelId: string; start: number; length: number }[];
 				emojis?: Record<string, string>;
 			}) => void;
 			deleted: (payload: ChatMessageLite['id']) => void;
@@ -315,10 +326,16 @@ export type Channels = {
 				description: string;
 				isArchived: boolean;
 				allowRecording: boolean;
+				hasChannels?: boolean;
+				iconId?: string | null;
+				iconUrl?: string;
+				iconBlurhash?: string | null;
+				iconDecorations?: UserLite['avatarDecorations'];
 			}) => void;
 			membershipStarted: (payload: { userId: string; }) => void;
 			membershipEnded: (payload: { userId: string; }) => void;
 			roomDeleted: () => void;
+			historyImported: (payload: { status: 'running' | 'completed' | 'unavailable'; }) => void;
 		};
 		receives: {
 			read: {

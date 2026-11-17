@@ -12,6 +12,7 @@ import { cli } from '@/scripts/operations.js';
 import { getAccountFromId } from '@/scripts/get-account-from-id.js';
 import { swLang } from '@/scripts/lang.js';
 import { getUserName } from '@/scripts/get-user-name.js';
+import { chatNotificationIcon } from '@/scripts/chat-icon.js';
 
 const closeNotificationsByTags = async (tags: string[]): Promise<void> => {
 	for (const n of (await Promise.all(tags.map(tag => globalThis.registration.getNotifications({ tag })))).flat()) {
@@ -202,6 +203,24 @@ async function composeNotification(data: PushNotificationDataMap[keyof PushNotif
 						data,
 					}];
 
+				case 'chatRoomInvitationReceived':
+					return [i18n.ts._notification.chatRoomInvitationReceived, {
+						body: `${data.body.invitation.room.name}\n${getUserName(data.body.invitation.user)} (@${data.body.invitation.user.username}${data.body.invitation.user.host != null ? '@' + data.body.invitation.user.host : ''})`,
+						icon: await chatNotificationIcon(data.body.invitation.room, data.userId),
+						badge: iconUrl('messages'),
+						data,
+						actions: [
+							{
+								action: 'accept',
+								title: i18n.ts.accept,
+							},
+							{
+								action: 'reject',
+								title: i18n.ts.reject,
+							},
+						],
+					}];
+
 				case 'achievementEarned':
 					return [i18n.ts._notification.achievementEarned, {
 						body: i18n.ts._achievements._types[`_${data.body.achievement}`].title,
@@ -283,9 +302,12 @@ async function composeNotification(data: PushNotificationDataMap[keyof PushNotif
 				renotify: true,
 			}];
 		case 'newChatMessage':
+			// 새 글의 알림에는 항상 작성자가 있다. 계정이 없어진 뒤 남은 과거 기록은 알리지 않는다
+			if (data.body.fromUser == null) return null;
 			if (data.body.toRoom != null) {
-				return [`${data.body.toRoom.name}: ${getUserName(data.body.fromUser)}: ${data.body.text}`, {
-					icon: data.body.fromUser.avatarUrl ?? undefined,
+				return [`${data.body.toRoom.name}`, {
+					body: `${getUserName(data.body.fromUser)}: ${data.body.text}`,
+					icon: await chatNotificationIcon(data.body.toRoom, data.userId),
 					badge: iconUrl('messages'),
 					tag: `chat:room:${data.body.toRoomId}`,
 					data,

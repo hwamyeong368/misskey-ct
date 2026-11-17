@@ -316,6 +316,7 @@ export class HttpRequestService {
 			timeout?: number,
 			size?: number,
 			isLocalAddressAllowed?: boolean,
+			redirect?: 'follow' | 'manual',
 		} = {},
 		extra: HttpRequestSendOptions = {
 			throwErrorWhenResponseNotOk: true,
@@ -341,6 +342,7 @@ export class HttpRequestService {
 			size: args.size ?? 10 * 1024 * 1024,
 			agent: (url) => this.getAgentByUrl(url, false, isLocalAddressAllowed),
 			signal: controller.signal,
+			...(args.redirect != null ? { redirect: args.redirect } : {}),
 		});
 
 		if (!res.ok && extra.throwErrorWhenResponseNotOk) {

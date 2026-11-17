@@ -85,7 +85,12 @@ import { FanoutTimelineService } from './FanoutTimelineService.js';
 import { ChannelFollowingService } from './ChannelFollowingService.js';
 import { ChatDiceService } from './ChatDiceService.js';
 import { ChatService } from './ChatService.js';
+import { ChatRoomChannelService } from './ChatRoomChannelService.js';
+import { ChatInviteLinkService } from './ChatInviteLinkService.js';
+import { ChatRoomNotificationService } from './ChatRoomNotificationService.js';
+import { ChatRoomBanService } from './ChatRoomBanService.js';
 import { ChatRosterService } from './ChatRosterService.js';
+import { ChatRoomHistoryService } from './ChatRoomHistoryService.js';
 import { ChatVoiceService } from './ChatVoiceService.js';
 import { HostPolicyService } from './HostPolicyService.js';
 import { CloudflareTurnService } from './CloudflareTurnService.js';
@@ -119,6 +124,7 @@ import { AuthSessionEntityService } from './entities/AuthSessionEntityService.js
 import { BlockingEntityService } from './entities/BlockingEntityService.js';
 import { ChannelEntityService } from './entities/ChannelEntityService.js';
 import { ChatEntityService } from './entities/ChatEntityService.js';
+import { ChatRoomIconEntityService } from './entities/ChatRoomIconEntityService.js';
 import { ClipEntityService } from './entities/ClipEntityService.js';
 import { DriveFileEntityService } from './entities/DriveFileEntityService.js';
 import { DriveFolderEntityService } from './entities/DriveFolderEntityService.js';
@@ -163,6 +169,7 @@ import { RemoteLoggerService } from './RemoteLoggerService.js';
 import { RemoteUserResolveService } from './RemoteUserResolveService.js';
 import { WebfingerService } from './WebfingerService.js';
 import { ApImageService } from './activitypub/models/ApImageService.js';
+import { ApChatRoomStateService } from './activitypub/ApChatRoomStateService.js';
 import { ApMentionService } from './activitypub/models/ApMentionService.js';
 import { ApNoteService } from './activitypub/models/ApNoteService.js';
 import { ApQuoteRequestService } from './activitypub/ApQuoteRequestService.js';
@@ -292,6 +299,7 @@ const $AppEntityService: Provider = { provide: 'AppEntityService', useExisting: 
 const $AuthSessionEntityService: Provider = { provide: 'AuthSessionEntityService', useExisting: AuthSessionEntityService };
 const $BlockingEntityService: Provider = { provide: 'BlockingEntityService', useExisting: BlockingEntityService };
 const $ChannelEntityService: Provider = { provide: 'ChannelEntityService', useExisting: ChannelEntityService };
+const $ChatRoomIconEntityService: Provider = { provide: 'ChatRoomIconEntityService', useExisting: ChatRoomIconEntityService };
 const $ChatEntityService: Provider = { provide: 'ChatEntityService', useExisting: ChatEntityService };
 const $ClipEntityService: Provider = { provide: 'ClipEntityService', useExisting: ClipEntityService };
 const $DriveFileEntityService: Provider = { provide: 'DriveFileEntityService', useExisting: DriveFileEntityService };
@@ -337,6 +345,7 @@ const $JsonLdService: Provider = { provide: 'JsonLdService', useExisting: JsonLd
 const $RemoteLoggerService: Provider = { provide: 'RemoteLoggerService', useExisting: RemoteLoggerService };
 const $RemoteUserResolveService: Provider = { provide: 'RemoteUserResolveService', useExisting: RemoteUserResolveService };
 const $WebfingerService: Provider = { provide: 'WebfingerService', useExisting: WebfingerService };
+const $ApChatRoomStateService: Provider = { provide: 'ApChatRoomStateService', useExisting: ApChatRoomStateService };
 const $ApImageService: Provider = { provide: 'ApImageService', useExisting: ApImageService };
 const $ApMentionService: Provider = { provide: 'ApMentionService', useExisting: ApMentionService };
 const $ApNoteService: Provider = { provide: 'ApNoteService', useExisting: ApNoteService };
@@ -433,8 +442,14 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		ChatService,
+		ChatRoomChannelService,
+		ChatInviteLinkService,
+		ChatRoomNotificationService,
+		ChatRoomBanService,
 		ChatDiceService,
 		ChatRosterService,
+		ChatRoomHistoryService,
+
 		ChatVoiceService,
 		HostPolicyService,
 		CloudflareTurnService,
@@ -474,6 +489,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		BlockingEntityService,
 		ChannelEntityService,
 		ChatEntityService,
+		ChatRoomIconEntityService,
 		ClipEntityService,
 		DriveFileEntityService,
 		DriveFolderEntityService,
@@ -520,6 +536,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		RemoteUserResolveService,
 		WebfingerService,
 		ApImageService,
+		ApChatRoomStateService,
 		ApMentionService,
 		ApNoteService,
 		ApQuoteRequestService,
@@ -644,6 +661,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		$BlockingEntityService,
 		$ChannelEntityService,
 		$ChatEntityService,
+		$ChatRoomIconEntityService,
 		$ClipEntityService,
 		$DriveFileEntityService,
 		$DriveFolderEntityService,
@@ -689,6 +707,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		$RemoteUserResolveService,
 		$WebfingerService,
 		$ApImageService,
+		$ApChatRoomStateService,
 		$ApMentionService,
 		$ApNoteService,
 		$ApQuoteRequestService,
@@ -776,8 +795,14 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		ChatService,
+		ChatRoomChannelService,
+		ChatInviteLinkService,
+		ChatRoomNotificationService,
+		ChatRoomBanService,
 		ChatDiceService,
 		ChatRosterService,
+		ChatRoomHistoryService,
+
 		ChatVoiceService,
 		HostPolicyService,
 		CloudflareTurnService,
@@ -816,6 +841,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		BlockingEntityService,
 		ChannelEntityService,
 		ChatEntityService,
+		ChatRoomIconEntityService,
 		ClipEntityService,
 		DriveFileEntityService,
 		DriveFolderEntityService,
@@ -862,6 +888,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		RemoteUserResolveService,
 		WebfingerService,
 		ApImageService,
+		ApChatRoomStateService,
 		ApMentionService,
 		ApNoteService,
 		ApQuoteRequestService,
@@ -984,6 +1011,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		$BlockingEntityService,
 		$ChannelEntityService,
 		$ChatEntityService,
+		$ChatRoomIconEntityService,
 		$ClipEntityService,
 		$DriveFileEntityService,
 		$DriveFolderEntityService,
@@ -1029,6 +1057,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		$RemoteUserResolveService,
 		$WebfingerService,
 		$ApImageService,
+		$ApChatRoomStateService,
 		$ApMentionService,
 		$ApNoteService,
 		$ApQuoteRequestService,
