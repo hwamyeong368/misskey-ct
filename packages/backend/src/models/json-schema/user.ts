@@ -500,6 +500,10 @@ export const packedMeDetailedOnlySchema = {
 			type: 'boolean',
 			nullable: false, optional: false,
 		},
+		autoDeleteNoteFiles: {
+			type: 'boolean',
+			nullable: false, optional: false,
+		},
 		carefulBot: {
 			type: 'boolean',
 			nullable: false, optional: false,

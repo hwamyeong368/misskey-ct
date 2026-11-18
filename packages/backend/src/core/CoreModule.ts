@@ -49,6 +49,7 @@ import { NoteCreateService } from './NoteCreateService.js';
 import { NoteCleanupService } from './NoteCleanupService.js';
 import { DriveFileUsageService } from './DriveFileUsageService.js';
 import { NoteDeleteService } from './NoteDeleteService.js';
+import { NoteAttachedFileService } from './NoteAttachedFileService.js';
 import { NotePiningService } from './NotePiningService.js';
 import { NoteUpdateService } from './NoteUpdateService.js';
 import { NoteDraftService } from './NoteDraftService.js';
@@ -223,6 +224,7 @@ const $MfmService: Provider = { provide: 'MfmService', useExisting: MfmService }
 const $ModerationLogService: Provider = { provide: 'ModerationLogService', useExisting: ModerationLogService };
 const $NoteCreateService: Provider = { provide: 'NoteCreateService', useExisting: NoteCreateService };
 const $NoteDeleteService: Provider = { provide: 'NoteDeleteService', useExisting: NoteDeleteService };
+const $NoteAttachedFileService: Provider = { provide: 'NoteAttachedFileService', useExisting: NoteAttachedFileService };
 const $NotePiningService: Provider = { provide: 'NotePiningService', useExisting: NotePiningService };
 const $DriveFileUsageService: Provider = { provide: 'DriveFileUsageService', useExisting: DriveFileUsageService };
 const $NoteUpdateService: Provider = { provide: 'NoteUpdateService', useExisting: NoteUpdateService };
@@ -401,6 +403,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		NoteCleanupService,
 		DriveFileUsageService,
 		NoteDeleteService,
+		NoteAttachedFileService,
 		NotePiningService,
 		NoteUpdateService,
 		NoteDraftService,
@@ -580,6 +583,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		$ModerationLogService,
 		$NoteCreateService,
 		$NoteDeleteService,
+		$NoteAttachedFileService,
 		$NotePiningService,
 		$NoteUpdateService,
 		$DriveFileUsageService,
@@ -755,6 +759,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		NoteCleanupService,
 		DriveFileUsageService,
 		NoteDeleteService,
+		NoteAttachedFileService,
 		NotePiningService,
 		NoteUpdateService,
 		NoteDraftService,
@@ -933,6 +938,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		$ModerationLogService,
 		$NoteCreateService,
 		$NoteDeleteService,
+		$NoteAttachedFileService,
 		$NotePiningService,
 		$NoteUpdateService,
 		$DriveFileUsageService,

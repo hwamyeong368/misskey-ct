@@ -125,6 +125,7 @@ describe('ユーザー', () => {
 			receiveAnnouncementEmail: user.receiveAnnouncementEmail,
 			alwaysMarkNsfw: user.alwaysMarkNsfw,
 			autoSensitive: user.autoSensitive,
+			autoDeleteNoteFiles: user.autoDeleteNoteFiles,
 			carefulBot: user.carefulBot,
 			autoAcceptFollowed: user.autoAcceptFollowed,
 			notificationRequestsEnabled: user.notificationRequestsEnabled,
@@ -373,6 +374,7 @@ describe('ユーザー', () => {
 		assert.strictEqual(response.receiveAnnouncementEmail, true);
 		assert.strictEqual(response.alwaysMarkNsfw, false);
 		assert.strictEqual(response.autoSensitive, false);
+		assert.strictEqual(response.autoDeleteNoteFiles, false);
 		assert.strictEqual(response.carefulBot, false);
 		assert.strictEqual(response.autoAcceptFollowed, true);
 		assert.strictEqual(response.notificationRequestsEnabled, false);
@@ -477,6 +479,8 @@ describe('ユーザー', () => {
 		{ parameters: () => ({ alwaysMarkNsfw: false }) },
 		{ parameters: () => ({ autoSensitive: true }) },
 		{ parameters: () => ({ autoSensitive: false }) },
+		{ parameters: () => ({ autoDeleteNoteFiles: true }) },
+		{ parameters: () => ({ autoDeleteNoteFiles: false }) },
 		{ parameters: () => ({ followingVisibility: 'private' as const }) },
 		{ parameters: () => ({ followingVisibility: 'followers' as const }) },
 		{ parameters: () => ({ followingVisibility: 'public' as const }) },
