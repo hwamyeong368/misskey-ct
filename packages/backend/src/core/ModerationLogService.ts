@@ -11,6 +11,7 @@ import { IdService } from '@/core/IdService.js';
 import { bindThis } from '@/decorators.js';
 import type { ModerationLogPayloads } from '@/types.js';
 import { moderationLogTypes } from '@/types.js';
+import { redactSystemWebhookLog } from '@/misc/redact-system-webhook-log.js';
 
 @Injectable()
 export class ModerationLogService {
@@ -24,11 +25,13 @@ export class ModerationLogService {
 
 	@bindThis
 	public async log<T extends typeof moderationLogTypes[number]>(moderator: { id: MiUser['id'] }, type: T, info?: ModerationLogPayloads[T]) {
+		const stored = info == null ? {} : redactSystemWebhookLog(type, info);
+
 		await this.moderationLogsRepository.insert({
 			id: this.idService.gen(),
 			userId: moderator.id,
 			type: type,
-			info: (info as any) ?? {},
+			info: stored as any,
 		});
 	}
 }

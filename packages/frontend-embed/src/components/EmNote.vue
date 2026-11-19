@@ -70,6 +70,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 					<EmPoll v-if="appearNote.poll" :noteId="appearNote.id" :poll="appearNote.poll" :readOnly="true" :class="$style.poll"/>
 					<div v-if="appearNote.renote" :class="$style.quote"><EmNoteSimple :note="appearNote.renote" :class="$style.quoteNote"/></div>
+					<EmA v-else-if="appearNote.isHidden && appearNote.renoteId" :to="`/notes/${appearNote.renoteId}`" :aria-label="i18n.ts.renote"><i class="ti ti-repeat"></i></EmA>
 					<button v-if="isLong && collapsed" :class="$style.collapsed" class="_button" @click="collapsed = false">
 						<span :class="$style.collapsedLabel">{{ i18n.ts.showMore }}</span>
 					</button>

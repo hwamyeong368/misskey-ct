@@ -14,7 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkImgWithBlurhash
 		v-if="isThumbnailAvailable && prefer.s.enableHighQualityImagePlaceholders"
 		:hash="file.blurhash"
-		:src="file.thumbnailUrl"
+		:src="forceBlurhash ? null : file.thumbnailUrl"
 		:alt="file.name"
 		:title="file.name"
 		:class="$style.thumbnail"
@@ -22,7 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:forceBlurhash="forceBlurhash"
 	/>
 	<img
-		v-else-if="isThumbnailAvailable && file.thumbnailUrl != null"
+		v-else-if="!forceBlurhash && isThumbnailAvailable && file.thumbnailUrl != null"
 		:src="file.thumbnailUrl"
 		:alt="file.name"
 		:title="file.name"

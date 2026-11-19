@@ -36,6 +36,7 @@ import { pleaseLogin } from '@/utility/please-login.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
+import { mfmPlain } from '@/utility/mfm-plain.js';
 import { useLowresTime } from '@@/js/use-lowres-time.js';
 
 const props = defineProps<{
@@ -95,7 +96,7 @@ const vote = async (id: number) => {
 
 	const { canceled } = await os.confirm({
 		type: 'question',
-		text: i18n.tsx.voteConfirm({ choice: props.choices[id].text }),
+		text: i18n.tsx.voteConfirm({ choice: mfmPlain(props.choices[id].text) }),
 	});
 	if (canceled) return;
 

@@ -19,13 +19,13 @@ import { signout } from '@/signout.js';
 
 type AccountWithToken = Misskey.entities.MeDetailed & { token: string };
 
-export async function getAccounts(): Promise<{
+export function getAccountsSync(): {
 	host: string;
 	id: Misskey.entities.User['id'];
 	username: Misskey.entities.User['username'];
 	user?: Misskey.entities.MeDetailed | null;
 	token: string | null;
-}[]> {
+}[] {
 	const tokens = store.s.accountTokens;
 	const accountInfos = store.s.accountInfos;
 	const accounts = prefer.s.accounts;
@@ -36,6 +36,16 @@ export async function getAccounts(): Promise<{
 		user: accountInfos[host + '/' + user.id],
 		token: tokens[host + '/' + user.id] ?? null,
 	}));
+}
+
+export async function getAccounts(): Promise<{
+	host: string;
+	id: Misskey.entities.User['id'];
+	username: Misskey.entities.User['username'];
+	user?: Misskey.entities.MeDetailed | null;
+	token: string | null;
+}[]> {
+	return getAccountsSync();
 }
 
 async function addAccount(host: string, user: Misskey.entities.MeDetailed, token: AccountWithToken['token']) {

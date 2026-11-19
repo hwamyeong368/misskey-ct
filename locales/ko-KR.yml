@@ -2931,6 +2931,10 @@ _visibility:
 _postForm:
   quitInspiteOfThereAreUnuploadedFilesConfirm: "업로드되지 않은 파일이 있습니다만, 없애고 폼을 닫겠습니까?"
   uploaderTip: "파일이 아직 업로드돼있지 않습니다. 파일 메뉴에서 이름 바꾸기나 이미지의 자르기, 워터마크 넣기, 압축의 유무 등을 설정할 수 있습니다. 파일은 노트 게시 시 자동으로 업로드됩니다."
+  detachFilesToChangeAccount: "계정을 바꾸려면 첨부한 드라이브 파일을 먼저 제거해 주세요."
+  attachmentAccountMismatch: "게시할 계정의 드라이브에서 파일을 고르거나, 첨부 파일을 소유한 계정으로 바꿔 주세요."
+  unavailableDraftRecipients: "초안의 대상자 {count}명을 불러오지 못했습니다. 게시하거나 저장하려면 해당 대상자를 제거해 주세요."
+  removeUnavailableDraftRecipients: "불러오지 못한 대상자 제거"
   replyPlaceholder: "이 노트에 답글..."
   quotePlaceholder: "이 노트를 인용..."
   channelPlaceholder: "채널에 게시하기..."

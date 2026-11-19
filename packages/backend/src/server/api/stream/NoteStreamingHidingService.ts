@@ -70,10 +70,10 @@ export class NoteStreamingHidingService {
 
 		for (let i = 0; i < renoteChain.length; i++) {
 			if (shouldHide[i]) {
-				this.noteEntityService.hideNote(currentCloned);
+				this.noteEntityService.hideNote(currentCloned, meId);
 			}
 			if (shouldHideReply[i] && currentCloned.reply) {
-				this.noteEntityService.hideNote(currentCloned.reply);
+				this.noteEntityService.hideNote(currentCloned.reply, meId);
 			}
 			currentCloned = currentCloned.renote!;
 		}

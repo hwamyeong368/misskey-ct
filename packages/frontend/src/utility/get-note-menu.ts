@@ -10,6 +10,7 @@ import type { Ref, ShallowRef } from 'vue';
 import type { MenuItem } from '@/types/menu.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
+import { mfmPlain } from '@/utility/mfm-plain.js';
 import { instance } from '@/instance.js';
 import { translateNoteWith, isKyunetTranslationAvailable } from '@/composables/use-kyunet-translation.js';
 import * as os from '@/os.js';
@@ -26,6 +27,7 @@ import { genEmbedCode } from '@/utility/get-embed-code.js';
 import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { globalEvents } from '@/events.js';
+import { translateWithState } from '@/utility/translate-with-state.js';
 
 const isInBrowserTranslationAvailable = (
 	'LanguageDetector' in window &&
@@ -58,7 +60,7 @@ export async function getNoteClipMenu(props: {
 					if (err.id === '734806c4-542c-463a-9311-15c512803965') {
 						const confirm = await os.confirm({
 							type: 'warning',
-							text: i18n.tsx.confirmToUnclipAlreadyClippedNote({ name: clip.name }),
+							text: i18n.tsx.confirmToUnclipAlreadyClippedNote({ name: mfmPlain(clip.name) }),
 						});
 						if (!confirm.canceled) {
 							os.apiWithDialog('clips/remove-note', { clipId: clip.id, noteId: appearNote.id }).then(() => {
@@ -287,7 +289,7 @@ export function getNoteMenu(props: {
 
 		const { canceled } = await os.confirm({
 			type: 'warning',
-			text: i18n.tsx.removeNoteFromAntennaConfirm({ name: props.currentAntenna.name }),
+			text: i18n.tsx.removeNoteFromAntennaConfirm({ name: mfmPlain(props.currentAntenna.name) }),
 		});
 		if (canceled) return;
 
@@ -321,7 +323,7 @@ export function getNoteMenu(props: {
 	}
 
 	async function translate(): Promise<void> {
-		if (props.translation.value != null) return;
+		if (props.translation.value != null || props.translating.value) return;
 		// kyunet: prefer the fork-only LLM route over DeepL / the browser translator when the server offers it
 		if (isKyunetTranslationAvailable()) {
 			await translateNoteWith(appearNote, props.translation, props.translating);
@@ -367,13 +369,10 @@ export function getNoteMenu(props: {
 				props.translating.value = false;
 			}
 		} else if ($i?.policies.canUseTranslator && instance.translatorAvailable) {
-			props.translating.value = true;
-			const res = await misskeyApi('notes/translate', {
+			await translateWithState(props.translation, props.translating, () => os.apiWithDialog('notes/translate', {
 				noteId: appearNote.id,
 				targetLang: miLocalStorage.getItem('lang') ?? navigator.language,
-			});
-			props.translating.value = false;
-			props.translation.value = res;
+			}));
 		}
 	}
 

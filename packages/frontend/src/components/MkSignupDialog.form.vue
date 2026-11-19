@@ -91,6 +91,7 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
+import { mfmPlain } from '@/utility/mfm-plain.js';
 import { login } from '@/accounts.js';
 
 const props = withDefaults(defineProps<{
@@ -284,7 +285,7 @@ async function onSubmit(): Promise<void> {
 			os.alert({
 				type: 'success',
 				title: i18n.ts._signup.almostThere,
-				text: i18n.tsx._signup.emailSent({ email: email.value }),
+				text: i18n.tsx._signup.emailSent({ email: mfmPlain(email.value) }),
 			});
 			emit('signupEmailPending');
 		} else {

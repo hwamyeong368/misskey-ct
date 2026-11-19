@@ -10,6 +10,23 @@ import { QueryService } from '@/core/QueryService.js';
 import { DI } from '@/di-symbols.js';
 import { ModerationLogEntityService } from '@/core/entities/ModerationLogEntityService.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
+import { SYSTEM_WEBHOOK_SECRET_KEY } from '@/misc/redact-system-webhook-log.js';
+
+/**
+ * #-는 배열이나 문자열 안의 객체 키를 제거할 때 오류가 날 수 있어 대상 필드가 객체일 때만 적용한다.
+ */
+function withoutRedactedKeys(expression: string, side: 'before' | 'after' | 'webhook', keys: readonly string[]): string {
+	const removed = keys.reduce((result, key) => `(${result} #- '{${side},${key}}'::text[])`, expression);
+	return `CASE WHEN jsonb_typeof(log.info -> '${side}') = 'object' THEN ${removed} ELSE ${expression} END`;
+}
+
+// 예전에 기록된 시스템 웹훅의 인증 정보도 검색 범위에서 제외한다.
+const WEBHOOK_REDACTED_KEYS = [SYSTEM_WEBHOOK_SECRET_KEY];
+const SEARCHABLE_INFO = `CASE
+	WHEN log.type = 'updateSystemWebhook' THEN ${withoutRedactedKeys(withoutRedactedKeys('log.info', 'before', WEBHOOK_REDACTED_KEYS), 'after', WEBHOOK_REDACTED_KEYS)}
+	WHEN log.type IN ('createSystemWebhook', 'deleteSystemWebhook') THEN ${withoutRedactedKeys('log.info', 'webhook', WEBHOOK_REDACTED_KEYS)}
+	ELSE log.info
+END`;
 
 export const meta = {
 	tags: ['admin'],
@@ -95,7 +112,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.search != null) {
 				const escapedSearch = sqlLikeEscape(ps.search);
-				query.andWhere('log.info::text ILIKE :search', { search: `%${escapedSearch}%` });
+				query.andWhere(`(${SEARCHABLE_INFO})::text ILIKE :search`, { search: `%${escapedSearch}%` });
 			}
 
 			const logs = await query.limit(ps.limit).getMany();

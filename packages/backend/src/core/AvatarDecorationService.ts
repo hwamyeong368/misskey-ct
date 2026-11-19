@@ -23,6 +23,7 @@ import { isStorableText } from '@/core/chat-room-channels.js';
 @Injectable()
 export class AvatarDecorationService implements OnApplicationShutdown {
 	public cache: MemorySingleCache<MiAvatarDecoration[]>;
+	private listCacheGeneration = 0;
 
 	constructor(
 		@Inject(DI.config)
@@ -53,13 +54,18 @@ export class AvatarDecorationService implements OnApplicationShutdown {
 				case 'avatarDecorationCreated':
 				case 'avatarDecorationUpdated':
 				case 'avatarDecorationDeleted': {
-					this.cache.delete();
+					this.invalidateListCache();
 					break;
 				}
 				default:
 					break;
 			}
 		}
+	}
+
+	private invalidateListCache(): void {
+		this.listCacheGeneration++;
+		this.cache.delete();
 	}
 
 	@bindThis
@@ -69,6 +75,7 @@ export class AvatarDecorationService implements OnApplicationShutdown {
 			...options,
 		});
 
+		this.invalidateListCache();
 		this.globalEventService.publishInternalEvent('avatarDecorationCreated', created);
 
 		if (moderator) {
@@ -91,6 +98,7 @@ export class AvatarDecorationService implements OnApplicationShutdown {
 			...params,
 		});
 
+		this.invalidateListCache();
 		const updated = await this.avatarDecorationsRepository.findOneByOrFail({ id: avatarDecoration.id });
 		this.globalEventService.publishInternalEvent('avatarDecorationUpdated', updated);
 
@@ -169,6 +177,7 @@ export class AvatarDecorationService implements OnApplicationShutdown {
 		const avatarDecoration = await this.avatarDecorationsRepository.findOneByOrFail({ id });
 
 		await this.avatarDecorationsRepository.delete({ id: avatarDecoration.id });
+		this.invalidateListCache();
 		this.globalEventService.publishInternalEvent('avatarDecorationDeleted', avatarDecoration);
 
 		if (moderator) {
@@ -182,9 +191,16 @@ export class AvatarDecorationService implements OnApplicationShutdown {
 	@bindThis
 	public async getAll(noCache = false): Promise<MiAvatarDecoration[]> {
 		if (noCache) {
+			this.listCacheGeneration++;
 			this.cache.delete();
 		}
-		return this.cache.fetch(() => this.avatarDecorationsRepository.find());
+		const cached = this.cache.get();
+		if (cached !== undefined) return cached;
+
+		const generation = this.listCacheGeneration;
+		const decorations = await this.avatarDecorationsRepository.find();
+		if (this.listCacheGeneration === generation) this.cache.set(decorations);
+		return decorations;
 	}
 
 	@bindThis
