@@ -56,7 +56,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (room == null || room.isArchived || me.isSuspended || me.isDeleted || (room.ownerId !== me.id && !member)) throw new ApiError(meta.errors.accessDenied);
 			// 録画はルームの持ち主が許したときだけ (持ち主のサーバーでも確かめる)
 			if (ps.recording === true && !room.allowRecording) throw new ApiError(meta.errors.recordingNotAllowed);
-			const status = { micMuted: ps.micMuted, deafened: ps.deafened, recording: ps.recording };
+			const status = { micMuted: ps.micMuted, deafened: ps.deafened, ...(ps.recording !== undefined ? { recording: ps.recording } : {}) };
 			if (room.owner?.host != null) {
 				try {
 					await this.remoteVoiceCallService.reportStatus(me, room, room.owner as MiRemoteUser, ps.sessionId, status);

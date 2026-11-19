@@ -27,6 +27,7 @@ import { NodeinfoServerService } from './NodeinfoServerService.js';
 import { ApiServerService } from './api/ApiServerService.js';
 import { StreamingApiServerService } from './api/StreamingApiServerService.js';
 import { LiveKitServerService } from './LiveKitServerService.js';
+import { RecordingDownloadServerService } from './RecordingDownloadServerService.js';
 import { WellKnownServerService } from './WellKnownServerService.js';
 import { FileServerService } from './FileServerService.js';
 import { HealthServerService } from './HealthServerService.js';
@@ -63,6 +64,7 @@ export class ServerService implements OnApplicationShutdown {
 		private openApiServerService: OpenApiServerService,
 		private streamingApiServerService: StreamingApiServerService,
 		private liveKitServerService: LiveKitServerService,
+		private recordingDownloadServerService: RecordingDownloadServerService,
 		private activityPubServerService: ActivityPubServerService,
 		private wellKnownServerService: WellKnownServerService,
 		private nodeinfoServerService: NodeinfoServerService,
@@ -165,6 +167,7 @@ export class ServerService implements OnApplicationShutdown {
 		fastify.register(this.healthServerService.createServer, { prefix: '/healthz' });
 		// arti: LiveKit signaling relay and webhook for voice calls (from choco)
 		fastify.register(this.liveKitServerService.createServer, { prefix: '/livekit' });
+		fastify.register(this.recordingDownloadServerService.createServer);
 
 		fastify.get<{ Params: { path: string }; Querystring: { static?: any; badge?: any; }; }>('/emoji/:path(.*)', async (request, reply) => {
 			const path = request.params.path;

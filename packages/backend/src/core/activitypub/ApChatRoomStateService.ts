@@ -52,7 +52,6 @@ export class ApChatRoomStateService {
 			name: typeof object.name === 'string' ? truncate(object.name, 256) : current.name,
 			description: typeof object.summary === 'string' ? truncate(object.summary, 2048) : current.description,
 			isArchived: typeof object._misskey_chatArchived === 'boolean' ? object._misskey_chatArchived : current.isArchived,
-			// CT: 그룹장이 통화 녹화를 허락했는지
 			allowRecording: typeof object.allowRecording === 'boolean' ? object.allowRecording : current.allowRecording,
 			...icon,
 		}, { federate: false, remoteUpdatedAt: updatedAt, remoteGroup: object });

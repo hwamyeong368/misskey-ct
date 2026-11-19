@@ -1899,7 +1899,7 @@ export type paths = {
     '/chat/rooms/voice/convert-recording': {
         /**
          * chat/rooms/voice/convert-recording
-         * @description No description provided.
+         * @description Convert recording parts into a single file without deleting the originals until it succeeds. Each id is either an uploaded drive file or a part kept in the temporary recording storage, in recording order. A null response means that no conversion was performed and the originals remain. A download response means the file exceeds the drive file size limit and is kept for a one-time download instead. Repeating the same requestId returns the earlier result, so a lost response can be recovered.
          *
          *     **Credential required**: *Yes* / **Permission**: *write:drive*
          */
@@ -1931,6 +1931,42 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:chat*
          */
         post: operations['chat___rooms___voice___mute'];
+    };
+    '/chat/rooms/voice/recording-discard': {
+        /**
+         * chat/rooms/voice/recording-discard
+         * @description Discard a temporarily kept recording download and temporary recording parts owned by the caller. Already gone is treated as success.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:drive*
+         */
+        post: operations['chat___rooms___voice___recording-discard'];
+    };
+    '/chat/rooms/voice/recording-folder': {
+        /**
+         * chat/rooms/voice/recording-folder
+         * @description Return the account's single remembered call-recording folder, creating it on first use. Serialized per user so concurrent first recordings do not create duplicates.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:drive*
+         */
+        post: operations['chat___rooms___voice___recording-folder'];
+    };
+    '/chat/rooms/voice/recording-part': {
+        /**
+         * chat/rooms/voice/recording-part
+         * @description Upload a recording part into the temporary recording storage, for parts that could not be stored in the drive. The caller must be a member of the given room. The conversion step concatenates these parts with the uploaded ones into a single final file.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:drive*
+         */
+        post: operations['chat___rooms___voice___recording-part'];
+    };
+    '/chat/rooms/voice/recording-result': {
+        /**
+         * chat/rooms/voice/recording-result
+         * @description Look up the result of an earlier recording conversion by requestId without converting again. Returns null when nothing is remembered.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:drive*
+         */
+        post: operations['chat___rooms___voice___recording-result'];
     };
     '/chat/rooms/voice/states': {
         /**
@@ -22099,8 +22135,14 @@ export interface operations {
         requestBody: {
             content: {
                 'application/json': {
-                    /** Format: misskey:id */
-                    fileId: string;
+                    fileIds: string[];
+                    requestId: string;
+                    video?: boolean;
+                    /**
+                     * Format: misskey:id
+                     * @default null
+                     */
+                    folderId?: string | null;
                 };
             };
         };
@@ -22111,7 +22153,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    'application/json': components['schemas']['DriveFile'] | null;
+                    'application/json': {
+                        file: components['schemas']['DriveFile'] | null;
+                        download: {
+                            id: string;
+                            name: string;
+                            size: number;
+                            /** @enum {string} */
+                            reason: 'tooLarge' | 'noFreeSpace';
+                        } | null;
+                    } | null;
                 };
             };
             /** @description OK (without any results) */
@@ -22345,6 +22396,326 @@ export interface operations {
             };
         };
         responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'chat___rooms___voice___recording-discard': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** @default null */
+                    id?: string | null;
+                    /** @default [] */
+                    partIds?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'chat___rooms___voice___recording-folder': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['DriveFolder'];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'chat___rooms___voice___recording-part': {
+        requestBody: {
+            content: {
+                'multipart/form-data': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /**
+                     * Format: binary
+                     * @description The file contents.
+                     */
+                    file: Blob;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        id: string;
+                        size: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'chat___rooms___voice___recording-result': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    requestId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        file: components['schemas']['DriveFile'] | null;
+                        download: {
+                            id: string;
+                            name: string;
+                            size: number;
+                            /** @enum {string} */
+                            reason: 'tooLarge' | 'noFreeSpace';
+                        } | null;
+                    } | null;
+                };
+            };
             /** @description OK (without any results) */
             204: {
                 headers: {

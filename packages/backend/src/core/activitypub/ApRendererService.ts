@@ -1057,7 +1057,7 @@ export class ApRendererService {
 	/** arti: the participants of a room's voice call, sent to members on other servers */
 	@bindThis
 	public renderChatRoomVoiceState(room: Pick<MiChatRoom, 'id'>, participants: { identity: string; screenSharing: boolean; micMuted?: boolean; deafened?: boolean; recording?: boolean }[], updatedAt: number): IChatRoomVoiceState {
-		const roomUri = `${this.config.url}/chat/rooms/${room.id}`;
+		const roomUri = this.genLocalChatRoomUri(room.id);
 		return {
 			id: chatRoomVoiceStateIdOf(roomUri),
 			type: 'ChatRoomVoiceState',
