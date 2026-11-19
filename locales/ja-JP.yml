@@ -2316,7 +2316,7 @@ _voiceCall:
   allowRecording: "通話の録画を許可"
   allowRecordingDescription: "オンにすると、参加者が通話 (声と共有画面) を録画できます。録画が始まると全員に知らされます。"
   recordingConversionsTitle: "録画の同時変換数"
-  recordingConversionsDescription: "通話の録画を MP3/MP4 に変換する処理を同時にいくつまで行うかです。変換は重いので少なめにしてください。0 にすると変換せず、WebM のまま保存します。"
+  recordingConversionsDescription: "通話の録画を MP3/MP4 に変換する処理を同時にいくつまで行うかです。変換は重いので少なめにしてください。長い録画をつなぐのにも使うので、1 以上にしてください。"
   _quality:
     sharp: "くっきり (1080p 15fps)"
     smooth: "なめらか (720p 30fps)"

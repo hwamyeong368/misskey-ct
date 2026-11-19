@@ -2290,7 +2290,7 @@ _voiceCall:
   allowRecording: "통화 녹화 허용"
   allowRecordingDescription: "켜면 참가자가 통화(목소리와 공유 화면)를 녹화할 수 있어요. 녹화가 시작되면 모두에게 알려요."
   recordingConversionsTitle: "녹화 동시 변환 수"
-  recordingConversionsDescription: "통화 녹화를 MP3/MP4로 바꾸는 작업을 동시에 몇 개까지 할지예요. 변환은 무거우니 적게 두세요. 0이면 변환하지 않고 WebM 그대로 저장해요."
+  recordingConversionsDescription: "통화 녹화를 MP3/MP4로 바꾸는 작업을 동시에 몇 개까지 할지예요. 변환은 무거우니 적게 두세요. 긴 녹화를 이어 붙일 때도 쓰여서 1 이상이어야 해요."
   _quality:
     sharp: "선명하게 (1080p 15fps)"
     smooth: "부드럽게 (720p 30fps)"
