@@ -98,6 +98,7 @@ import { RemoteVoiceCallService } from './RemoteVoiceCallService.js';
 import { ApSignedRequestVerifierService } from './activitypub/ApSignedRequestVerifierService.js';
 import { LiveKitService } from './LiveKitService.js';
 import { RegistryApiService } from './RegistryApiService.js';
+import { RecordingStorageService } from './RecordingStorageService.js';
 import { ReversiService } from './ReversiService.js';
 import { PageService } from './PageService.js';
 
@@ -456,6 +457,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		RemoteVoiceCallService,
 		ApSignedRequestVerifierService,
 		LiveKitService,
+		RecordingStorageService,
 		RegistryApiService,
 		ReversiService,
 		KyunetTranslationSettingService,
@@ -809,6 +811,7 @@ const $KyunetImageLoader: Provider = { provide: 'KyunetImageLoader', useExisting
 		RemoteVoiceCallService,
 		ApSignedRequestVerifierService,
 		LiveKitService,
+		RecordingStorageService,
 		RegistryApiService,
 		ReversiService,
 		KyunetTranslationSettingService,

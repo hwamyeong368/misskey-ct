@@ -343,7 +343,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</SearchMarker>
 
 							<SearchMarker :keywords="['voice', 'call', 'recording', 'ffmpeg']">
-								<MkInput v-model="federationForm.state.voiceCallMaxRecordingConversions" type="number" :min="0" :max="16" :step="1">
+								<MkInput v-model="federationForm.state.voiceCallMaxRecordingConversions" type="number" :min="1" :max="16" :step="1">
 									<template #label><SearchLabel>{{ i18n.ts._voiceCall.recordingConversionsTitle }}</SearchLabel><span v-if="federationForm.modifiedStates.voiceCallMaxRecordingConversions" class="_modified">{{ i18n.ts.modified }}</span></template>
 									<template #caption><SearchText>{{ i18n.ts._voiceCall.recordingConversionsDescription }}</SearchText></template>
 								</MkInput>

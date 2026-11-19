@@ -14,7 +14,9 @@ export type ParsedChatRoomVoiceState = {
 	roomUri: string;
 	/** room の URI に含まれるルームの番号。そのサーバーの中でしか一意でない */
 	roomId: string;
+	/** identity は参加者のユーザーの URI */
 	participants: { identity: string; screenSharing: boolean; micMuted?: boolean; deafened?: boolean; recording?: boolean }[];
+	/** ホストの時刻 (ミリ秒) */
 	updatedAt: number;
 };
 
@@ -70,6 +72,7 @@ function roomIdOfUri(uri: string, origin: string): string | null {
 	return ROOM_ID.test(roomId) ? roomId : null;
 }
 
+/** ChatRoomVoiceState の participants を確かめる。形が違うか、maxParticipants 人より多ければ null */
 function parseParticipants(value: unknown, maxParticipants: number): { identity: string; screenSharing: boolean; micMuted?: boolean; deafened?: boolean; recording?: boolean }[] | null {
 	if (!Array.isArray(value) || value.length > maxParticipants) return null;
 

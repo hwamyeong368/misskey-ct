@@ -226,7 +226,7 @@ export const paramDef = {
 		allowExternalApRedirect: { type: 'boolean' },
 		enableRemoteNotesCleaning: { type: 'boolean' },
 		enableRemoteVoiceCall: { type: 'boolean' },
-		voiceCallMaxRecordingConversions: { type: 'integer', minimum: 0, maximum: 16 },
+		voiceCallMaxRecordingConversions: { type: 'integer', minimum: 1, maximum: 16 },
 		remoteNotesCleaningExpiryDaysForEachNotes: { type: 'number' },
 		remoteNotesCleaningMaxProcessingDurationInMinutes: { type: 'number' },
 		showRoleBadgesOfRemoteUsers: { type: 'boolean' },

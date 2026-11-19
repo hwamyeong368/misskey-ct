@@ -7,12 +7,15 @@ import { reactive, readonly } from 'vue';
 import * as Misskey from 'misskey-js';
 import { apiUrl, url } from '@@/js/config.js';
 import { $i } from '@/i.js';
+import { instance } from '@/instance.js';
 import type { AudioCaptureOptions, DisconnectReason, LocalAudioTrack, LocalParticipant, LocalTrack, LocalTrackPublication, Participant, RemoteParticipant, RemoteTrack, RemoteTrackPublication, Room, RoomConnectOptions, TrackPublication, VideoPreset } from 'livekit-client';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { isApiError } from '@/utility/api-error.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
+import { userNameForLabel } from '@/filters/user.js';
+import { createRecordingSegments, recordingSegmentBytes } from '@/utility/recording-recorder.js';
 
 export type VoiceCallStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting';
 
@@ -38,8 +41,9 @@ const state = reactive({
 	screenShareIdentities: [] as string[],
 	// 見ている共有画面 (見始めた順)。いくつでも同時に見られる
 	watchingIdentities: [] as string[],
-	// arti: 通話の録音 (声だけ)。録音中は参加者に知らせる
+	// 通話の録画 (声と画面)。録画中は参加者に知らせる
 	recording: false,
+	recordingStarting: false,
 	recordingStartedAt: null as number | null,
 	// ルームの持ち主が録画を許しているか (既定では許さない)
 	recordingAllowed: false,
@@ -67,48 +71,94 @@ type StatusDelivery = {
 	retryDelay: number;
 	timer: number | null;
 	stopped: boolean;
+	// 녹음 시작 승인을 기다리는 쪽. 녹음 보고가 수락되거나 영구 거절되면 알려 준다
+	approval: { resolve: () => void; reject: (err: unknown) => void } | null;
 };
 let statusDelivery: StatusDelivery | null = null;
 // スピーカーを切り替えた回数。マイクを入れるのを待つあいだに切り替えられたかを見分ける
 let deafenRevision = 0;
 
-// arti: record the call in separate tracks (my microphone, the other side, video when present)
-const RECORDING_CHUNK_BYTES = 100 * 1024 * 1024;
-type RecordingPartKind = 'mic' | 'others' | 'video';
-type RecordingPart = {
-	recorder: MediaRecorder;
-	chunks: Blob[];
-	bytes: number;
-	uploads: Promise<void>[];
-	name: string;
+// record the whole call as one file: a single recorder mixes every voice and, when present, the shared screens
+type RecordingUploadReason = 'noFreeSpace' | 'tooLarge' | 'network' | null;
+// 업로드된 임시 조각 원본. 변환 단계에서 순서대로 이어 붙여 최종 파일 하나를 만들고 지운다.
+type RecordingPartRef = { fileId: string; url: string | null; name: string; index: number };
+// 드라이브에 못 올라가 서버의 녹화 전용 임시 보관에 있는 조각. 변환가 드라이브 조각과 함께 이어 붙인다.
+type RecordingTempPartRef = { partId: string; name: string; index: number };
+// 드라이브 파일 한도를 넘은 최종 파일의 임시 내려받기. 본인만 한 번 받을 수 있다.
+type RecordingDownloadRef = { id: string; name: string; size: number; reason: 'noFreeSpace' | 'tooLarge' };
+// 저장에 실패한 녹화 전체. 올라간 조각은 드라이브에, 못 올린 조각은 blob으로 남겨 재시도·기기 저장·버리기를 제공한다.
+type FailedRecording = {
+	reason: RecordingUploadReason;
+	uploaded: RecordingPartRef[];
+	pending: { blob: Blob; name: string; index: number }[];
+	ext: string;
 };
-const recordingParts = new Map<RecordingPartKind, RecordingPart>();
+
+class RecordingUploadError extends Error {
+	constructor(public reason: RecordingUploadReason) {
+		super('Failed to save or convert the recording');
+	}
+}
+/**
+ * 一回の録画。通話の状態 (state.room) とは別に持ち、通話が終わって状態が片付いた後に届く最後の部分も同じ録画として保存する
+ */
+type RecordingSession = {
+	roomId: string;
+	// 같은 녹화의 변환 재시도는 같은 requestId를 쓴다. 응답을 잃어도 서버가 이전 결과를 돌려준다.
+	requestId: string;
+	uploads: Promise<boolean>[];
+	failed: FailedRecording[];
+	stopping: boolean;
+	micRevision: number;
+	// 올라간 임시 조각들. 녹화가 끝나면 순서대로 이어 붙여 변환한다.
+	parts: RecordingPartRef[];
+	// 드라이브에 못 올려 녹화 전용 임시 보관에 올린 조각들.
+	tempParts: RecordingTempPartRef[];
+	failedUploads: { blob: Blob; name: string; index: number; reason: RecordingUploadReason }[];
+	hasVideo: boolean;
+	folderId: string | null;
+	folderName: string | null;
+	// 한도 초과로 드라이브 대신 임시 보관된 최종 파일. 기기 저장은 이 한 파일을 받는다.
+	pendingDownload: RecordingDownloadRef | null;
+	name: string;
+	ext: string;
+};
+type RecordingPart = {
+	stop: () => void;
+};
+let recordingPart: RecordingPart | null = null;
+let recordingSession: RecordingSession | null = null;
+// サーバーが録画を受け付けるのを待っているあいだ。二重に始めない
+let recordingStarting: object | null = null;
 let recordingContext: AudioContext | null = null;
 let recordingMicBus: GainNode | null = null;
-let recordingOthersBus: GainNode | null = null;
 let recordingMixedDest: MediaStreamAudioDestinationNode | null = null;
-let pendingRecordingUploads: Promise<void>[] = [];
 let recordingConversions: Promise<void> = Promise.resolve();
 let recordingRawMicStream: MediaStream | null = null;
 const recordingSources = new Map<MediaStreamTrack, { source: MediaStreamAudioSourceNode; kind: 'mic' | 'others' }>();
 let recordingCanvas: HTMLCanvasElement | null = null;
 let recordingCanvasStream: MediaStream | null = null;
-let recordingDrawTimer: number | null = null;
+let recordingCanvasTimer: number | null = null;
 const recordingVideos = new Map<MediaStreamTrack, { element: HTMLVideoElement; screen: boolean }>();
 
 function recordingMimeType(): string | undefined {
 	if (typeof MediaRecorder === 'undefined') return undefined;
-	return ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find(type => MediaRecorder.isTypeSupported(type));
+	return ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'].find(type => MediaRecorder.isTypeSupported(type));
 }
 
 function recordingVideoMimeType(): string | undefined {
 	if (typeof MediaRecorder === 'undefined') return undefined;
-	return ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(type => MediaRecorder.isTypeSupported(type));
+	return ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'].find(type => MediaRecorder.isTypeSupported(type));
 }
 
 function addRecordingVideo(track: MediaStreamTrack, screen: boolean): void {
 	// this runs on every share, not only while recording
-	if (recordingContext == null || recordingVideos.has(track)) return;
+	if (recordingSession?.stopping !== false || recordingContext == null) return;
+	if (recordingVideos.has(track)) {
+		// 준비 구간 동안 이미 등록된 트랙도 캔버스가 생긴 뒤에는 영상 여부를 다시 확정한다.
+		markRecordingVideo();
+		return;
+	}
 	if (screen) {
 		try { track.contentHint = 'detail'; } catch { /* not supported */ }
 	}
@@ -119,10 +169,10 @@ function addRecordingVideo(track: MediaStreamTrack, screen: boolean): void {
 	void element.play().catch(() => {});
 	recordingVideos.set(track, { element, screen });
 	watchRecordingVideo(track, element);
-	ensureRecordingVideoPart();
+	markRecordingVideo();
 }
 
-/** arti: redraw whenever the source produces a frame; background tabs throttle timers */
+/** redraw whenever the source produces a frame; background tabs throttle timers */
 function watchRecordingVideo(track: MediaStreamTrack, video: HTMLVideoElement): void {
 	const step = () => {
 		const entry = recordingVideos.get(track);
@@ -140,26 +190,33 @@ function watchRecordingVideo(track: MediaStreamTrack, video: HTMLVideoElement): 
 	schedule();
 }
 
-/** arti: start the video part when the first video track appears, even after recording began */
-function ensureRecordingVideoPart(): void {
-	if (recordingParts.has('video') || recordingMixedDest == null || recordingContext == null) return;
-	if (recordingCanvas == null) {
+/** capture the compositing canvas from the start so a share that appears mid-recording lands in the same file */
+function createRecordingCanvas(): MediaStream | null {
+	try {
 		const canvas = window.document.createElement('canvas');
-		canvas.width = 1920;
-		canvas.height = 1080;
+		// 녹화용 화질: 720p/15fps. 공유 화면의 문자는 읽을 수 있고 용량은 크게 줄어든다.
+		canvas.width = 1280;
+		canvas.height = 720;
+		const stream = canvas.captureStream(15);
 		recordingCanvas = canvas;
-		recordingCanvasStream = canvas.captureStream(30);
-		if (typeof HTMLVideoElement.prototype.requestVideoFrameCallback !== 'function') {
-			recordingDrawTimer = window.setInterval(drawRecordingFrame, 33);
-		}
 		drawRecordingFrame();
+		// 화면이 없는 동안에도 프레임을 계속 내보내야 recorder가 조각을 낸다
+		recordingCanvasTimer = window.setInterval(drawRecordingFrame, 1000);
+		return stream;
+	} catch (err) {
+		// without a canvas we cannot add video later; this stays an audio-only recording
+		console.warn('[recording] could not capture the canvas; recording audio only', err);
+		recordingCanvas = null;
+		return null;
 	}
-	console.info(`[recording] video sources=${recordingVideos.size}`);
-	const base = recordingParts.get('mic')?.name ?? `voice-${recordingStamp(new Date())}`;
-	createRecordingPart('video', new MediaStream([
-		...recordingMixedDest.stream.getAudioTracks(),
-		...recordingCanvasStream!.getVideoTracks(),
-	]), recordingVideoMimeType(), 12_000_000, `${base.replace(/-mic$/, '')}-video-${recordingStamp(new Date())}`);
+}
+
+/** note that the call now has video; the whole recording is converted as video at the end */
+function markRecordingVideo(): void {
+	const session = recordingSession;
+	if (session == null || session.stopping || session.hasVideo || recordingCanvasStream == null) return;
+	session.hasVideo = true;
+	drawRecordingFrame();
 }
 
 function removeRecordingVideo(track: MediaStreamTrack): void {
@@ -168,6 +225,7 @@ function removeRecordingVideo(track: MediaStreamTrack): void {
 	entry.element.pause();
 	entry.element.srcObject = null;
 	recordingVideos.delete(track);
+	drawRecordingFrame();
 }
 
 function drawRecordingFrame(): void {
@@ -203,13 +261,13 @@ function drawRecordingFrame(): void {
 }
 
 function addRecordingTrack(track: MediaStreamTrack, kind: 'mic' | 'others'): void {
-	if (recordingContext == null) return;
-	const bus = kind === 'mic' ? recordingMicBus : recordingOthersBus;
-	if (bus == null || recordingSources.has(track)) return;
-	console.info(`[recording] ${kind} track channels=${track.getSettings().channelCount ?? '?'}`);
+	if (recordingSession?.stopping !== false || recordingContext == null) return;
+	// the microphone passes through a gain bus so muting stays in sync; other voices feed the mix directly
+	const dest = kind === 'mic' ? recordingMicBus : recordingMixedDest;
+	if (dest == null || recordingSources.has(track)) return;
 	try {
 		const source = recordingContext.createMediaStreamSource(new MediaStream([track]));
-		source.connect(bus);
+		source.connect(dest);
 		recordingSources.set(track, { source, kind });
 	} catch (err) {
 		console.warn('[recording] could not connect a track', err);
@@ -228,90 +286,251 @@ function recordingStamp(date: Date): string {
 	return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
-async function uploadRecording(blob: Blob, name: string): Promise<void> {
-	const roomId = state.room?.id;
-	if (roomId == null || blob.size === 0) return;
+// ドライブのファイル名規則 (200 文字以内、\ / .. は使えない) に合わせ、絵文字のshortcodeと零幅文字も落とす。
+// 末尾の -NNN と拡張子を入れても 200 に収まるよう、名前の部分は 175 文字までに切る
+const RECORDING_NAME_MAX = 175;
+
+function sanitizeRecordingName(name: string): string {
+	let cleaned = name
+		.replace(/:[\w+-]+(?:@[\w.-]+)?:/g, ' ')
+		.replace(/[\u200b-\u200d\u2060\ufeff]/g, '')
+		.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, ' ')
+		.replace(/\.\./g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+	if (cleaned.length > RECORDING_NAME_MAX) {
+		cleaned = cleaned.slice(0, RECORDING_NAME_MAX);
+		// 代理pairの途中で切らない
+		const last = cleaned.charCodeAt(cleaned.length - 1);
+		if (last >= 0xd800 && last <= 0xdbff) cleaned = cleaned.slice(0, -1);
+		cleaned = cleaned.trim();
+	}
+	return cleaned;
+}
+
+/** ルーム名で録画ファイルを名付ける。ルーム名がなく相手が一人だけなら相手の名前を使う */
+async function recordingFileLabel(room: Room, roomId: string): Promise<string> {
+	const roomName = sanitizeRecordingName(state.room?.name ?? '');
+	if (roomName) return roomName;
+	const fallback = 'voice';
+	if (room.remoteParticipants.size !== 1) return fallback;
+	const otherIdentity = [...room.remoteParticipants.keys()][0];
+	try {
+		const states = await misskeyApi('chat/rooms/voice/states', { roomIds: [roomId] });
+		const voiceState = Array.isArray(states) ? states.find(candidate => candidate.roomId === roomId) : null;
+		const other = voiceState?.participants.find(participant => participant.identity === otherIdentity);
+		if (other != null) return sanitizeRecordingName(userNameForLabel(other.user)) || fallback;
+	} catch {
+		// 参加者一覧が取れなければルーム名で保存する
+	}
+	return fallback;
+}
+
+/** 계정에 기억된 녹화 폴더를 가져온다. 없으면 서버가 지금 언어 이름으로 만들고 기억한다. 실패하면 루트에 저장 */
+async function ensureRecordingFolder(): Promise<{ id: string; name: string } | null> {
+	const name = i18n.ts._voiceCall.recordingFolderName;
+	try {
+		const folder = await misskeyApi('chat/rooms/voice/recording-folder', { name });
+		if (folder?.id != null) return { id: folder.id, name: folder.name };
+		return null;
+	} catch (err) {
+		console.warn('[recording] could not prepare the recordings folder; saving to the drive root', err);
+		return null;
+	}
+}
+
+/** 녹화 원본을 드라이브에 올린다. 변환은 따로 처리하며, 이미 올라간 원본은 다시 올리지 않는다. */
+async function uploadRecordingOriginal(session: RecordingSession, blob: Blob, name: string): Promise<{ fileId: string; url: string | null }> {
 	const form = new FormData();
-	form.append('file', blob, `${name}.webm`);
-	// Misskey authenticates API calls with the token in the form, not with cookies
+	form.append('file', new File([blob], `${name}${session.ext}`, { type: blob.type }));
+	// 변환 후 정리할 원본이 기존 첨부와 공유되지 않도록 독립 파일로 저장한다.
+	form.append('force', 'true');
+	if (session.folderId != null) form.append('folderId', session.folderId);
 	if ($i != null) form.append('i', $i.token);
-	const res = await window.fetch(apiUrl + '/drive/files/create', { method: 'POST', body: form, credentials: 'omit' });
-	if (!res.ok) throw new Error(`failed to upload the recording: ${res.status}`);
-	let file = await res.json() as Misskey.entities.DriveFile;
-	// the server converts one recording per user at a time, so convert the parts one after another
-	const fileId = file.id;
-	const conversion = recordingConversions.then(() => misskeyApi('chat/rooms/voice/convert-recording', { fileId }));
+	let res: Response;
+	try {
+		res = await window.fetch(apiUrl + '/drive/files/create', { method: 'POST', body: form, credentials: 'omit' });
+	} catch {
+		throw new RecordingUploadError('network');
+	}
+	if (!res.ok) {
+		const body = await res.json().catch(() => null) as { error?: { id?: string } } | null;
+		const id = body?.error?.id;
+		const reason = id === 'd08dbc37-a6a9-463a-8c47-96c32ab5f064' ? 'noFreeSpace'
+			: res.status === 413 || id === 'b9d8c348-33f0-4673-b9a9-5d4da058977a' ? 'tooLarge' : null;
+		throw new RecordingUploadError(reason);
+	}
+	const file = await res.json() as Misskey.entities.DriveFile;
+	return { fileId: file.id, url: file.url ?? null };
+}
+
+/** 드라이브에 못 올린 조각을 녹화 전용 임시 보관에 올린다. 변환가 이 조각을 이어 붙여 최종 파일 하나를 만든다. */
+async function uploadRecordingTempPart(session: RecordingSession, blob: Blob, name: string): Promise<string> {
+	const form = new FormData();
+	form.append('file', new File([blob], `${name}${session.ext}`, { type: blob.type }));
+	form.append('roomId', session.roomId);
+	if ($i != null) form.append('i', $i.token);
+	let res: Response;
+	try {
+		res = await window.fetch(apiUrl + '/chat/rooms/voice/recording-part', { method: 'POST', body: form, credentials: 'omit' });
+	} catch {
+		throw new RecordingUploadError('network');
+	}
+	if (!res.ok) {
+		const body = await res.json().catch(() => null) as { error?: { id?: string } } | null;
+		const reason = body?.error?.id === '6f4860e9-3726-4f2c-9bef-4d812f810018' ? 'tooLarge' : null;
+		throw new RecordingUploadError(reason);
+	}
+	const part = await res.json() as { id: string };
+	return part.id;
+}
+
+/** 못 올린 조각들을 임시 보관으로 올린다. 올린 조각은 목록에서 빼고, 못 올린 조각이 남으면 실패로 알린다. */
+async function uploadPendingToRecordingStorage(session: RecordingSession, pending: { blob: Blob; name: string; index: number }[]): Promise<void> {
+	let firstError: RecordingUploadError | null = null;
+	const left: typeof pending = [];
+	for (const part of pending) {
+		try {
+			const partId = await uploadRecordingTempPart(session, part.blob, part.name);
+			session.tempParts.push({ partId, name: part.name, index: part.index });
+		} catch (err) {
+			if (firstError == null) firstError = err instanceof RecordingUploadError ? err : new RecordingUploadError('network');
+			left.push(part);
+		}
+	}
+	pending.length = 0;
+	pending.push(...left);
+	if (firstError != null) throw firstError;
+}
+
+/** 올라간 임시 조각들을 순서대로 이어 붙여 최종 파일 하나로 변환한다. 서버가 성공 뒤에 조각을 지운다. */
+async function convertRecording(session: RecordingSession): Promise<Misskey.entities.DriveFile> {
+	// 드라이브 조각과 임시 보관 조각을 녹화 순서대로 섞어 넘긴다. 서버가 이어 붙여 파일 하나를 만든다.
+	const fileIds = [
+		...session.parts.map(part => ({ id: part.fileId, index: part.index })),
+		...session.tempParts.map(part => ({ id: part.partId, index: part.index })),
+	].sort((a, b) => a.index - b.index).map(part => part.id);
+	// the server converts one recording per user at a time, so serialize conversions
+	const conversion = recordingConversions.then(async () => {
+		let result: Misskey.Endpoints['chat/rooms/voice/convert-recording']['res'];
+		try {
+			result = await misskeyApi('chat/rooms/voice/convert-recording', { fileIds, requestId: session.requestId, video: session.hasVideo, folderId: session.folderId });
+		} catch (error) {
+			if (isApiError(error) && error.code === 'NO_SUCH_FOLDER') {
+				// 폴더가 사라졌으면 다시 확보(재생성)하고, 그래도 없으면 루트로 한 번만 재시도
+				const folder = await ensureRecordingFolder();
+				session.folderId = folder?.id ?? null;
+				session.folderName = folder?.name ?? null;
+				result = await misskeyApi('chat/rooms/voice/convert-recording', { fileIds, requestId: session.requestId, video: session.hasVideo, folderId: session.folderId });
+			} else {
+				throw error;
+			}
+		}
+		return result;
+	});
 	recordingConversions = conversion.then(() => {}, () => {});
 	try {
-		const converted = await conversion;
-		if (converted != null) file = converted;
-	} catch { /* keep the WebM when ffmpeg fails */ }
-	// the recording stays in the drive; it is not posted to the room
-}
-
-function flushRecordingChunk(kind: RecordingPartKind, force: boolean): void {
-	const part = recordingParts.get(kind);
-	if (part == null || part.chunks.length === 0) return;
-	if (!force && part.bytes < RECORDING_CHUNK_BYTES) return;
-	const blob = new Blob(part.chunks, { type: part.recorder.mimeType || 'audio/webm' });
-	part.chunks = [];
-	part.bytes = 0;
-	const upload = uploadRecording(blob, part.name).catch(err => {
-		console.error(err);
-	});
-	part.uploads.push(upload);
-	pendingRecordingUploads.push(upload);
-}
-
-function createRecordingPart(kind: RecordingPartKind, stream: MediaStream, mime: string | undefined, bits: number, name: string): void {
-	const options: MediaRecorderOptions = { ...(mime != null ? { mimeType: mime } : {}) };
-	if (kind === 'video') {
-		options.videoBitsPerSecond = bits;
-		options.audioBitsPerSecond = 192_000;
-	} else {
-		options.audioBitsPerSecond = bits;
+		const result = await conversion;
+		// 최종 파일이 만들어지지 않았으면 저장 성공으로 처리하지 않는다.
+		if (result == null) throw new RecordingUploadError(null);
+		if (result.download != null) {
+			// 드라이브 한도 초과: 최종 파일은 서버가 잠시 보관한다. 기기 저장은 이 한 파일을 받는다.
+			session.pendingDownload = result.download;
+			throw new RecordingUploadError(result.download.reason);
+		}
+		const converted = result.file;
+		if (converted == null) throw new RecordingUploadError(null);
+		// 저장 안내는 실제 저장 위치를 기준으로 한다
+		session.pendingDownload = null;
+		session.folderId = converted.folderId ?? null;
+		session.folderName = converted.folderId != null ? session.folderName : null;
+		return converted;
+	} catch (error) {
+		if (error instanceof RecordingUploadError) throw error;
+		const code = isApiError(error) ? error.code : null;
+		// 서버 응답 없이 끝난 실패는 서버가 이미 보관을 끝냈을 수 있어 원본 위치를 단정하지 않는다
+		const reason = code === 'OUTPUT_TOO_LARGE' || code === 'INPUT_TOO_LARGE' ? 'tooLarge' : code === 'NO_FREE_SPACE' ? 'noFreeSpace' : !isApiError(error) ? 'network' : null;
+		throw new RecordingUploadError(reason);
 	}
-	const rec = new MediaRecorder(stream, options);
-	const part: RecordingPart = { recorder: rec, chunks: [], bytes: 0, uploads: [], name };
-	recordingParts.set(kind, part);
-	rec.ondataavailable = (ev) => {
-		if (ev.data.size === 0) return;
-		part.chunks.push(ev.data);
-		part.bytes += ev.data.size;
-		flushRecordingChunk(kind, false);
-	};
-	rec.onstop = () => {
-		flushRecordingChunk(kind, true);
-		void Promise.allSettled(part.uploads);
-		if (kind === 'video') stopRecordingVideo();
-		recordingParts.delete(kind);
-		if (recordingParts.size === 0) teardownRecording();
-	};
-	rec.start(10_000);
+}
+
+/** 응답 유실 뒤에도 실제 남은 결과를 찾는다. 변환을 다시 실행하지 않는 조회 경로. */
+async function fetchRecordingResult(session: RecordingSession): Promise<Misskey.Endpoints['chat/rooms/voice/recording-result']['res']> {
+	return await misskeyApi('chat/rooms/voice/recording-result', { requestId: session.requestId });
+}
+
+/** 조각을 올리는 대로 임시 원본으로 모아 둔다. 변환은 녹화가 끝난 뒤 한 번만 한다 */
+function trackRecordingUpload(session: RecordingSession, blob: Blob, name: string, index: number): void {
+	if (blob.size === 0) return;
+	session.uploads.push((async () => {
+		try {
+			const { fileId, url } = await uploadRecordingOriginal(session, blob, name);
+			session.parts.push({ fileId, url, name, index });
+			return true;
+		} catch (err) {
+			console.error(err);
+			session.failedUploads.push({ blob, name, index, reason: err instanceof RecordingUploadError ? err.reason : null });
+			return false;
+		}
+	})());
+}
+
+/** 재시도: 폴더를 다시 확인하고, 못 올린 조각을 올린 뒤 모든 조각을 이어 붙여 변환한다 */
+async function retryRecording(session: RecordingSession, recording: FailedRecording): Promise<void> {
+	const folder = await ensureRecordingFolder();
+	session.folderId = folder?.id ?? null;
+	session.folderName = folder?.name ?? null;
+	const stillPending: FailedRecording['pending'] = [];
+	for (const part of recording.pending) {
+		try {
+			const { fileId, url } = await uploadRecordingOriginal(session, part.blob, part.name);
+			recording.uploaded.push({ fileId, url, name: part.name, index: part.index });
+		} catch {
+			stillPending.push(part);
+		}
+	}
+	recording.pending = stillPending;
+	// 드라이브에 여전히 못 올리는 조각은 녹화 전용 임시 보관으로 받아 최종 파일 하나를 만든다.
+	await uploadPendingToRecordingStorage(session, recording.pending);
+	session.parts = recording.uploaded;
+	await convertRecording(session);
+}
+
+function createRecordingPart(session: RecordingSession, stream: MediaStream, mime: string | undefined, video: boolean): void {
+	const options: MediaRecorderOptions = { ...(mime != null ? { mimeType: mime } : {}), audioBitsPerSecond: 256_000 };
+	// 녹화용 영상 비트레이트. 라이브 시청용 12Mbps 대신 2.5Mbps로 용량을 줄인다.
+	if (video) options.videoBitsPerSecond = 2_500_000;
+	if ($i == null) throw new Error('Recording requires an authenticated user');
+	const recorder = createRecordingSegments(stream, options, recordingSegmentBytes($i.policies.maxFileSizeMb, instance.maxFileSize), {
+		onSegment: (blob, index) => trackRecordingUpload(session, blob, index === 1 ? session.name : `${session.name}-${String(index).padStart(3, '0')}`, index),
+		onStop: () => {
+			recordingPart = null;
+			teardownRecording();
+		},
+		onError: error => {
+			console.error(error);
+			stopRecording();
+			os.toast(i18n.ts._voiceCall.recordingStopped);
+		},
+	});
+	recordingPart = { stop: recorder.stop };
 }
 
 function stopRecordingVideo(): void {
-	if (recordingDrawTimer != null) {
-		window.clearInterval(recordingDrawTimer);
-		recordingDrawTimer = null;
-	}
 	for (const track of [...recordingVideos.keys()]) removeRecordingVideo(track);
 	recordingCanvas = null;
+	if (recordingCanvasTimer != null) window.clearInterval(recordingCanvasTimer);
+	recordingCanvasTimer = null;
 	recordingCanvasStream?.getTracks().forEach(track => track.stop());
 	recordingCanvasStream = null;
 }
 
 function teardownRecording(): void {
 	stopRecordingVideo();
-	const uploads = pendingRecordingUploads;
-	pendingRecordingUploads = [];
-	if (uploads.length > 0) {
-		void Promise.allSettled(uploads).then(() => {
-			os.toast(i18n.ts._voiceCall.recordingSaved);
-		});
-	}
+	const session = recordingSession;
+	recordingSession = null;
+	if (session != null) void finishRecordingSession(session);
 	recordingMicBus = null;
-	recordingOthersBus = null;
 	recordingMixedDest = null;
 	recordingRawMicStream?.getTracks().forEach(track => track.stop());
 	recordingRawMicStream = null;
@@ -320,28 +539,254 @@ function teardownRecording(): void {
 	recordingSources.clear();
 }
 
+/** 녹화의 모든 조각을 올린 뒤 이어 붙여 변환한다. 저장됐다고 알리는 것은 정말로 최종 파일 하나가 저장됐을 때뿐 */
+async function finishRecordingSession(session: RecordingSession): Promise<void> {
+	if (session.uploads.length === 0 && session.parts.length === 0 && session.failedUploads.length === 0) return;
+	await Promise.all(session.uploads);
+	if (session.failedUploads.length > 0) {
+		// 드라이브에 못 올린 조각은 녹화 전용 임시 보관으로 받아, 이미 올라간 조각과 함께 이어 붙여 최종 파일 하나를 만든다.
+		const pending = session.failedUploads.map(({ blob, name, index }) => ({ blob, name, index }));
+		try {
+			await uploadPendingToRecordingStorage(session, pending);
+			await convertRecording(session);
+		} catch (err) {
+			console.error(err);
+			session.failed.push({
+				reason: err instanceof RecordingUploadError ? err.reason : session.failedUploads[0].reason,
+				uploaded: [...session.parts],
+				pending,
+				ext: session.ext,
+			});
+		}
+	} else if (session.parts.length > 0) {
+		try {
+			await convertRecording(session);
+		} catch (err) {
+			console.error(err);
+			session.failed.push({ reason: err instanceof RecordingUploadError ? err.reason : null, uploaded: [...session.parts], pending: [], ext: session.ext });
+		}
+	}
+	if (session.failed.length === 0) {
+		toastRecordingSaved(session);
+		return;
+	}
+	await offerFailedRecordings(session);
+}
+
+function toastRecordingSaved(session: RecordingSession): void {
+	os.toast(session.folderName != null
+		? i18n.tsx._voiceCall.recordingSavedToFolder({ folder: session.folderName })
+		: i18n.ts._voiceCall.recordingSaved);
+}
+
+/** 기기 저장: 서버가 만든 최종 파일 한 개만 받는다. 아직 없으면 변환을 시도하고, 끝내 없으면 실패로 알린다. 여러 원본 조각을 내려주지 않는다. */
+async function downloadRecording(recording: FailedRecording, session: RecordingSession): Promise<boolean> {
+	const save = (blob: Blob, filename: string) => {
+		const objectUrl = URL.createObjectURL(blob);
+		const a = window.document.createElement('a');
+		a.href = objectUrl;
+		a.download = filename;
+		a.click();
+		window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+	};
+	const saveFromUrl = async (url: string, filename: string): Promise<boolean> => {
+		try {
+			const res = await window.fetch(url, { credentials: 'omit' });
+			if (!res.ok) throw new Error(`download failed: ${res.status}`);
+			save(await res.blob(), filename);
+			return true;
+		} catch (err) {
+			console.warn('[recording] could not download the recording', err);
+			return false;
+		}
+	};
+	const saveDownload = async (download: RecordingDownloadRef): Promise<boolean> => {
+		if ($i == null) return false;
+		try {
+			const res = await window.fetch(`${url}/recording-download/${download.id}`, { headers: { Authorization: `Bearer ${$i.token}` } });
+			if (!res.ok) throw new Error(`download failed: ${res.status}`);
+			save(await res.blob(), download.name);
+			return true;
+		} catch (err) {
+			console.warn('[recording] could not download the kept recording', err);
+			return false;
+		}
+	};
+	const fail = () => {
+		os.toast(i18n.ts._voiceCall.recordingDownloadFailed);
+		return false;
+	};
+	// 응답을 잃었거나 한도 초과인 경우, 실제 남은 최종 파일 한 개를 받는다 (조각이 이미 지워졌을 수 있다)
+	const result = await fetchRecordingResult(session).catch(() => null);
+	if (result?.file != null) {
+		return result.file.url != null && await saveFromUrl(result.file.url, result.file.name) ? true : fail();
+	}
+	const download = result?.download ?? session.pendingDownload;
+	if (download != null) session.pendingDownload = download;
+	if (download != null) {
+		return await saveDownload(download) ? true : fail();
+	}
+	// 아직 최종 파일이 없으면 못 올린 조각까지 임시 보관으로 올려 변환을 시도한다.
+	try {
+		await uploadPendingToRecordingStorage(session, recording.pending);
+		session.parts = recording.uploaded;
+		const converted = await convertRecording(session);
+		return converted.url != null && await saveFromUrl(converted.url, converted.name) ? true : fail();
+	} catch (err) {
+		console.warn('[recording] could not prepare the final recording file', err);
+		// 변환이 드라이브 한도 초과로 끝나면 서버가 보관한 최종 파일 한 개를 받는다.
+		if (session.pendingDownload != null) {
+			return await saveDownload(session.pendingDownload) ? true : fail();
+		}
+		return fail();
+	}
+}
+
+/** 버리기를 확정하면 실제 남은 자료를 지운다: 최종 결과(응답 유실 뒤 드라이브에 남은 파일·임시 보관)와 임시 조각. 삭제에 실패한 원본은 목록에 남도록 돌려준다. */
+async function discardUploadedOriginals(failed: FailedRecording[], session: RecordingSession): Promise<FailedRecording[]> {
+	let resultDeleted = true;
+	// 조회가 실패하면 결과가 없는지 알 수 없으므로 버리기를 실패로 둔다
+	const result = await fetchRecordingResult(session).catch(error => {
+		console.warn('[recording] could not look up the recording result', error);
+		resultDeleted = false;
+		return null;
+	});
+	if (result?.file != null) {
+		try {
+			await misskeyApi('drive/files/delete', { fileId: result.file.id });
+		} catch (error) {
+			if (!(isApiError(error) && error.code === 'NO_SUCH_FILE')) {
+				console.warn('[recording] could not delete the converted recording', error);
+				resultDeleted = false;
+			}
+		}
+	}
+	const download = result?.download ?? session.pendingDownload;
+	if (download != null) session.pendingDownload = download;
+	if (download != null || session.tempParts.length > 0) {
+		try {
+			await misskeyApi('chat/rooms/voice/recording-discard', {
+				...(download != null ? { id: download.id } : {}),
+				...(session.tempParts.length > 0 ? { partIds: session.tempParts.map(part => part.partId) } : {}),
+			});
+		} catch (error) {
+			console.warn('[recording] could not discard the kept recording', error);
+			resultDeleted = false;
+		}
+	}
+	const undeleted: FailedRecording[] = [];
+	await Promise.all(failed.map(async recording => {
+		let allDeleted = resultDeleted;
+		for (const part of recording.uploaded) {
+			try {
+				await misskeyApi('drive/files/delete', { fileId: part.fileId });
+			} catch (error) {
+				// 이미 지워진 파일은 성공으로 취급한다. 그 밖의 실패는 원본을 남겨 다시 버릴 수 있게 한다
+				if (isApiError(error) && error.code === 'NO_SUCH_FILE') continue;
+				console.warn('[recording] could not delete a discarded original', error);
+				allDeleted = false;
+			}
+		}
+		if (!allDeleted) undeleted.push(recording);
+	}));
+	return undeleted;
+}
+
+/** 드라이브에 원본이 남아 있다고 말해도 되는지. 서버가 최종 파일을 보관 중이거나, 변환 응답 없이 끝나 서버 상태를 모르면 말하지 않는다 */
+function isOriginalInDrive(failed: FailedRecording[], session: RecordingSession): boolean {
+	if (session.pendingDownload != null) return false;
+	const unknownConversion = failed.some(recording => recording.reason === 'network' && recording.pending.length === 0 && recording.uploaded.length > 0);
+	return !unknownConversion && failed.some(recording => recording.uploaded.length > 0);
+}
+
+/** 저장하지 못한 녹화는 이용자가 고를 때까지 남긴다 (다시 올리기·이 기기에 저장·버리기). 실패한 항목은 선택창을 다시 제공한다 */
+async function offerFailedRecordings(session: RecordingSession): Promise<void> {
+	let failed = session.failed;
+	while (failed.length > 0) {
+		const reason = (['noFreeSpace', 'tooLarge', 'network'] as const).find(candidate => failed.some(recording => recording.reason === candidate));
+		// 서버가 최종 파일을 보관 중이면 원본 조각은 이미 지워졌으므로 드라이브에 원본이 있다고 보지 않는다
+		const hasOriginal = isOriginalInDrive(failed, session);
+		const hasUploadFailure = failed.some(recording => recording.pending.length > 0);
+		const caption = reason === 'noFreeSpace' ? (hasOriginal ? i18n.ts._voiceCall.recordingConversionNoFreeSpace : i18n.ts.cannotUploadBecauseNoFreeSpace)
+			: reason === 'tooLarge' ? (hasOriginal ? i18n.ts._voiceCall.recordingConversionTooLarge : i18n.ts.cannotUploadBecauseExceedsFileSizeLimit)
+				: reason === 'network' ? i18n.ts.cannotUploadBecauseNetworkError : undefined;
+		const text = hasOriginal
+			? hasUploadFailure ? i18n.ts._voiceCall.recordingMixedFailure : i18n.tsx._voiceCall.recordingConversionFailed({ n: failed.length })
+			: i18n.tsx._voiceCall.recordingSaveFailed({ n: failed.length });
+		const { canceled, result } = await os.actions({
+			type: 'error',
+			// CT: os.actions에 caption이 없어 이유를 본문 아래 줄에 붙인다
+			text: caption != null ? `${text}\n${caption}` : text,
+			actions: [
+				{ value: 'retry', text: i18n.ts.retry, primary: true },
+				{ value: 'download', text: i18n.ts._voiceCall.recordingSaveToDevice },
+				{ value: 'discard', text: i18n.ts._voiceCall.recordingDiscard, danger: true },
+			],
+		});
+		// 閉じただけでは捨てない。選ぶまでもう一度聞く
+		if (canceled) continue;
+		if (result === 'download') {
+			const results = await Promise.all(failed.map(recording => downloadRecording(recording, session)));
+			// 다운로드에 실패한 항목은 다시 고를 수 있게 선택창을 유지한다
+			failed = failed.filter((_, i) => !results[i]);
+			if (failed.length === 0) return;
+			continue;
+		}
+		if (result === 'discard') {
+			const confirmed = await os.confirm({ type: 'warning', text: hasOriginal ? i18n.ts._voiceCall.recordingDiscardConfirmUploaded : i18n.ts._voiceCall.recordingDiscardConfirm });
+			if (!confirmed.canceled) {
+				const undeleted = await discardUploadedOriginals(failed, session);
+				if (undeleted.length === 0) return;
+				// 삭제에 실패한 원본은 드라이브에 남는다. 오류로 알리고 다시 버릴 수 있게 목록을 유지한다.
+				// 알림이 닫힌 뒤에 목록을 다시 띄운다. 바로 띄우면 알림이 목록 뒤에 가려져 보이지 않는다
+				failed = undeleted;
+				const originalLeft = isOriginalInDrive(undeleted, session);
+				await os.alert({ type: 'error', text: originalLeft ? i18n.tsx._voiceCall.recordingDiscardDeleteFailed({ n: undeleted.length }) : i18n.tsx._voiceCall.recordingDiscardFailed({ n: undeleted.length }) });
+			}
+			continue;
+		}
+		const retrying = failed;
+		failed = [];
+		const results = await os.promiseDialog(Promise.all(retrying.map(recording => retryRecording(session, recording).then(() => true, err => {
+			console.error(err);
+			recording.reason = err instanceof RecordingUploadError ? err.reason : recording.reason;
+			failed.push(recording);
+			return false;
+		}))), null, null);
+		if (results.every(ok => ok)) toastRecordingSaved(session);
+	}
+}
+
 function resetStatusDelivery(): void {
 	if (statusDelivery?.timer != null) window.clearTimeout(statusDelivery.timer);
+	statusDelivery?.approval?.reject(new Error('Recording approval canceled'));
 	statusDelivery = null;
 }
 
 // Keep only the newest settings. A failed report must not leave the server stale for the rest of the call.
+// 録音中かどうかもいまの値一つだけを実って送り、終わった録音の痕跡は残さない
 function reportStatus(room: Room, force = false): void {
 	const roomId = state.room?.id;
 	if (current !== room || roomId == null || state.status === 'connecting') return;
-	const status = { roomId, sessionId: room.localParticipant.sid, micMuted: !state.micEnabled, deafened: state.deafened, recording: state.recording };
-	if (statusDelivery?.room !== room || statusDelivery.latest.sessionId !== status.sessionId) {
+	const recording = state.recording || recordingStarting != null;
+	const sessionId = room.localParticipant.sid;
+	const prev = statusDelivery != null && statusDelivery.room === room && statusDelivery.latest.sessionId === sessionId ? statusDelivery : null;
+	const status = { roomId, sessionId, micMuted: !state.micEnabled, deafened: state.deafened, recording };
+	let delivery: StatusDelivery;
+	if (prev == null) {
 		resetStatusDelivery();
-		statusDelivery = { room, latest: status, pending: status, sending: false, retryDelay: 1000, timer: null, stopped: false };
+		delivery = { room, latest: status, pending: status, sending: false, retryDelay: 1000, timer: null, stopped: false, approval: null };
+		statusDelivery = delivery;
 	} else {
-		if (!force && statusDelivery.latest.micMuted === status.micMuted && statusDelivery.latest.deafened === status.deafened && statusDelivery.latest.recording === status.recording) return;
+		if (!force && prev.latest.micMuted === status.micMuted && prev.latest.deafened === status.deafened && prev.latest.recording === status.recording) return;
 		// 止めたのは失敗した報告の再送だけ。設定が変わったら、新しい設定はもう一度だけ送ってみる
 		// (セッションを確かめる一時的な失敗も ACCESS_DENIED になるので、一度の失敗で通話の残りずっと黙らない)
-		statusDelivery.stopped = false;
-		statusDelivery.latest = status;
-		statusDelivery.pending = status;
+		prev.stopped = false;
+		prev.latest = status;
+		prev.pending = status;
+		delivery = prev;
 	}
-	void deliverStatus(statusDelivery);
+	void deliverStatus(delivery);
 }
 
 async function deliverStatus(delivery: StatusDelivery): Promise<void> {
@@ -352,15 +797,28 @@ async function deliverStatus(delivery: StatusDelivery): Promise<void> {
 	try {
 		await misskeyApi('chat/rooms/voice/status', status);
 		delivery.retryDelay = 1000;
+		// 録音報告が受け付けられたら、開始を待っている側に知らせる
+		if (status.recording === true && delivery.approval != null) {
+			delivery.approval.resolve();
+			delivery.approval = null;
+		}
 	} catch (err) {
 		if (statusDelivery !== delivery || current !== delivery.room) return;
 		const code = isApiError(err) ? err.code : null;
-		if (code === 'RECORDING_NOT_ALLOWED') {
-			// the owner turned recording off before we heard about it: stop, and report that we stopped
-			state.recordingAllowed = false;
-			stopRecording();
+		const permanent = code != null && code !== 'RATE_LIMIT_EXCEEDED' && code !== 'INTERNAL_ERROR' && code !== 'REMOTE_HOST_UNREACHABLE';
+		if (code === 'RECORDING_NOT_ALLOWED') state.recordingAllowed = false;
+		if (permanent && status.recording === true) {
+			if (delivery.approval != null) {
+				// まだ開始を待っているあいだの拒否は、開始側が後片付けして知らせる
+				delivery.approval.reject(err);
+				delivery.approval = null;
+			} else if (recordingStarting != null || recordingSession != null) {
+				// 録画していると伝えるのを断られたら (持ち主が許さなくなった・通話の資格を確かめられないなど)、理由によらず録画を止め、止めたことを伝える
+				stopRecording();
+				os.toast(i18n.ts._voiceCall.recordingRejected);
+			}
 		}
-		if (code != null && code !== 'RATE_LIMIT_EXCEEDED' && code !== 'INTERNAL_ERROR' && code !== 'REMOTE_HOST_UNREACHABLE') {
+		if (permanent) {
 			// Unsupported hosts and permanent API errors must not generate a retry loop.
 			// 送り直さないのは失敗した設定だけ。送っているあいだに変わった新しい設定は、下でもう一度だけ送ってみる
 			if (delivery.pending == null) {
@@ -398,7 +856,11 @@ function watchMicrophoneTrack(room: Room, track: LocalAudioTrack): void {
 	if (livekit == null || watchedMicrophoneTrack === track) return;
 	unwatchMicrophoneTrack?.();
 	const events = livekit.TrackEvent;
-	const onRestarted = () => { if (current === room) startLocalMeter(room); };
+	const onRestarted = () => {
+		if (current !== room) return;
+		startLocalMeter(room);
+		if (recordingSession != null) void captureRecordingMicrophone(recordingSession, room);
+	};
 	const onEnded = () => { stopLocalMeter?.(); };
 	track.on(events.Restarted, onRestarted);
 	track.on(events.Ended, onEnded);
@@ -468,6 +930,7 @@ export function localIdentityOf(userId: string): string {
 
 async function disconnectCurrentRoom(): Promise<void> {
 	const room = current;
+	stopRecording();
 	current = null;
 	if (room != null) {
 		await room.disconnect();
@@ -475,108 +938,186 @@ async function disconnectCurrentRoom(): Promise<void> {
 	}
 }
 
-/** arti: start recording the call in separate tracks (microphone, the other side, video when present) */
+/** start recording the whole call as one file (every voice, plus the shared screens when present) */
 export async function startRecording(): Promise<void> {
 	const room = current;
-	if (room == null || recordingParts.size > 0 || state.status !== 'connected' || !state.recordingAllowed) return;
+	const roomId = state.room?.id;
+	if (room == null || roomId == null || recordingStarting || recordingPart != null || state.status !== 'connected' || !state.recordingAllowed) return;
 	const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 	if (Context == null || typeof MediaRecorder === 'undefined') return;
 
-	const context = new Context();
-	// a suspended context feeds no samples to the recorder
-	await context.resume().catch(() => {});
-	recordingContext = context;
-
-	const micDest = context.createMediaStreamDestination();
-	const othersDest = context.createMediaStreamDestination();
-	const mixedDest = context.createMediaStreamDestination();
-	for (const dest of [micDest, othersDest, mixedDest]) {
-		dest.channelCount = 2;
-		dest.channelCountMode = 'explicit';
-	}
-	const micBus = context.createGain();
-	const othersBus = context.createGain();
-	micBus.connect(micDest);
-	micBus.connect(mixedDest);
-	othersBus.connect(othersDest);
-	othersBus.connect(mixedDest);
-	recordingMixedDest = mixedDest;
-	recordingMicBus = micBus;
-	recordingOthersBus = othersBus;
-	recordingSources.clear();
-
-	const base = recordingStamp(new Date());
-	createRecordingPart('mic', micDest.stream, recordingMimeType(), 192_000, `voice-${base}-mic`);
-	createRecordingPart('others', othersDest.stream, recordingMimeType(), 256_000, `voice-${base}-call`);
-
-	const lk = livekit;
-	let hasVideo = false;
-	// capture the microphone without the call's voice processing (echo cancellation, noise
-	// suppression, auto gain), which makes music and quiet voices sound thin
+	// 시작 전체에 소유권을 두어, 취소한 대기의 continuation이 다음 통화의 자원을 덮어쓰지 못하게 한다.
+	const attempt = {};
+	recordingStarting = attempt;
+	state.recordingStarting = true;
+	const active = () => recordingStarting === attempt && current === room && state.room?.id === roomId && state.status === 'connected' && state.recordingAllowed;
+	let approved = false;
 	try {
-		const raw = await navigator.mediaDevices.getUserMedia({
-			audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-		});
-		recordingRawMicStream = raw;
-		const track = raw.getAudioTracks()[0];
-		if (track != null) {
-			track.enabled = state.micEnabled;
-			addRecordingTrack(track, 'mic');
+		// 서버가 녹음을 받아들이는지 먼저 보고한다. 수락과 일시 오류 재시도는 상태 보고의 배달 경로가 맡는다
+		reportStatus(room, true);
+		const delivery = statusDelivery;
+		if (delivery == null || delivery.room !== room) return;
+		await new Promise<void>((resolve, reject) => { delivery.approval = { resolve, reject }; });
+		approved = true;
+		if (!active()) {
+			if (current === room && recordingStarting == null && recordingSession == null) reportStatus(room, true);
+			return;
 		}
-	} catch {
-		// fall back to the microphone of the call
+		const session: RecordingSession = { roomId, requestId: crypto.randomUUID(), uploads: [], failed: [], stopping: false, micRevision: 0, parts: [], tempParts: [], failedUploads: [], hasVideo: false, folderId: null, folderName: null, pendingDownload: null, name: 'voice', ext: '.webm' };
+		recordingSession = session;
+		// 녹화 중에는 시청 여부와 무관하게 원격 공유를 구독한다. 준비 구간 동안 들어온 공유도 놓치지 않는다.
+		resyncAllSubscriptions();
+
+		const context = new Context();
+		// resume을 기다리는 동안에도 stopRecording이 이 context를 닫을 수 있다.
+		recordingContext = context;
+		await context.resume();
+		if (!active()) return;
+
+		const mixedDest = context.createMediaStreamDestination();
+		mixedDest.channelCount = 2;
+		mixedDest.channelCountMode = 'explicit';
+		const micBus = context.createGain();
+		micBus.connect(mixedDest);
+		recordingMixedDest = mixedDest;
+		recordingMicBus = micBus;
+		recordingSources.clear();
+
+		syncRecordingMicrophone();
+
+		// 저장 폴더와 파일 이름을 미리 준비한다. 폴더가 없으면 루트에 저장한다
+		const [folder, label] = await Promise.all([ensureRecordingFolder(), recordingFileLabel(room, roomId)]);
+		if (!active()) return;
+		session.folderId = folder?.id ?? null;
+		session.folderName = folder?.name ?? null;
+		const startedAt = new Date();
+		session.name = `${label}-${recordingStamp(startedAt)}`;
+
+		// 처음부터 캔버스를 capture해 두면, 녹음 중간에 나타난 화면도 같은 파일에 담긴다
+		recordingCanvasStream = createRecordingCanvas();
+		// 준비 구간 동안 이미 들어온 공유는 캔버스가 생긴 지금 영상으로 확정한다.
+		if (recordingCanvasStream != null && recordingVideos.size > 0) markRecordingVideo();
+
+		await captureRecordingMicrophone(session, room);
+		if (!active()) return;
+		const lk = livekit;
 		if (lk != null) {
-			const mic = room.localParticipant.getTrackPublication(lk.Track.Source.Microphone)?.track;
-			if (mic?.mediaStreamTrack != null) addRecordingTrack(mic.mediaStreamTrack, 'mic');
-		}
-	}
-	if (lk != null) {
-		// my own tab audio is not played to my speakers, so it only reaches the recording here
-		const shareAudio = room.localParticipant.getTrackPublication(lk.Track.Source.ScreenShareAudio)?.track;
-		if (shareAudio?.mediaStreamTrack != null) addRecordingTrack(shareAudio.mediaStreamTrack, 'others');
-		const shareVideo = room.localParticipant.getTrackPublication(lk.Track.Source.ScreenShare)?.track;
-		if (shareVideo?.mediaStreamTrack != null) {
-			addRecordingVideo(shareVideo.mediaStreamTrack, true);
-			hasVideo = true;
-		}
-		for (const participant of room.remoteParticipants.values()) {
-			for (const publication of participant.trackPublications.values()) {
-				const track = publication.track?.mediaStreamTrack;
-				if (track == null) continue;
-				if (publication.kind === lk.Track.Kind.Audio) {
-					addRecordingTrack(track, 'others');
-				} else if (publication.kind === lk.Track.Kind.Video) {
-					addRecordingVideo(track, publication.source === lk.Track.Source.ScreenShare);
-					hasVideo = true;
+			// my own tab audio is not played to my speakers, so it only reaches the recording here
+			const shareAudio = room.localParticipant.getTrackPublication(lk.Track.Source.ScreenShareAudio)?.track;
+			if (shareAudio?.mediaStreamTrack != null) addRecordingTrack(shareAudio.mediaStreamTrack, 'others');
+			const shareVideo = room.localParticipant.getTrackPublication(lk.Track.Source.ScreenShare)?.track;
+			if (shareVideo?.mediaStreamTrack != null) addRecordingVideo(shareVideo.mediaStreamTrack, true);
+			for (const participant of room.remoteParticipants.values()) {
+				for (const publication of participant.trackPublications.values()) {
+					const track = publication.track?.mediaStreamTrack;
+					if (track == null) continue;
+					if (publication.kind === lk.Track.Kind.Audio) {
+						addRecordingTrack(track, 'others');
+					} else if (publication.kind === lk.Track.Kind.Video) {
+						addRecordingVideo(track, publication.source === lk.Track.Source.ScreenShare);
+					}
 				}
 			}
-		}
-		for (const track of screenShareTracks.values()) {
-			if (track.mediaStreamTrack != null) {
-				addRecordingVideo(track.mediaStreamTrack, true);
-				hasVideo = true;
+			for (const track of screenShareTracks.values()) {
+				if (track.mediaStreamTrack != null) addRecordingVideo(track.mediaStreamTrack, true);
 			}
 		}
+
+		// 하나의 recorder가 섞인 음성과 (캔버스가 있으면) 화면을 함께 녹음한다. 화면이 없으면 검은 화면이고, 서버가 음성만 뽑아 mp3로 만든다
+		const video = recordingCanvasStream != null;
+		const stream = new MediaStream([
+			...mixedDest.stream.getAudioTracks(),
+			...(recordingCanvasStream?.getVideoTracks() ?? []),
+		]);
+		const mime = video ? recordingVideoMimeType() : recordingMimeType();
+		session.ext = mime != null && (mime.startsWith('video/mp4') || mime.startsWith('audio/mp4')) ? '.mp4' : '.webm';
+		createRecordingPart(session, stream, mime, video);
+
+		state.recording = true;
+		state.recordingStartedAt = startedAt.getTime();
+		reportStatus(room, true);
+	} catch (err) {
+		if (recordingStarting === attempt) {
+			if (isApiError(err) && err.code === 'RECORDING_NOT_ALLOWED') state.recordingAllowed = false;
+			stopRecording();
+			os.toast(i18n.ts._voiceCall.recordingStartRejected);
+		}
+	} finally {
+		if (recordingStarting === attempt) {
+			if (!state.recording) stopRecording();
+			recordingStarting = null;
+			state.recordingStarting = false;
+		}
+		// 승인 뒤 실패하거나 취소됐으면 서버에 남은 녹화 표시도 되돌린다.
+		if (approved && !state.recording && current === room && recordingStarting == null && recordingSession == null) reportStatus(room, true);
 	}
-
-	// only composite video when there is something to show; otherwise this stays an audio recording
-	if (hasVideo) ensureRecordingVideoPart();
-
-	state.recording = true;
-	state.recordingStartedAt = Date.now();
-	reportStatus(room, true);
 }
 
-/** arti: stop recording and upload what is left */
+/** stop recording and upload what is left */
 export function stopRecording(): void {
-	if (recordingParts.size === 0) return;
+	const session = recordingSession;
+	const hadRecording = recordingStarting != null || session?.stopping === false || state.recording;
+	recordingStarting = null;
+	state.recordingStarting = false;
+	// 시작 승인을 기다리는 중이었으면 더 기다리지 않게 한다. 취소는 거절 토스트 없이 끝난다
+	if (statusDelivery?.approval != null) {
+		statusDelivery.approval.reject(new Error('Recording approval canceled'));
+		statusDelivery.approval = null;
+	}
+	if (session != null) {
+		session.stopping = true;
+	}
+	// 녹화가 끝나면 공유 구독을 시청·미리보기 기준으로 되돌린다
+	resyncAllSubscriptions();
 	state.recording = false;
 	state.recordingStartedAt = null;
-	if (current != null) reportStatus(current, true);
-	for (const part of [...recordingParts.values()]) {
-		try { part.recorder.requestData(); } catch { /* not recording yet */ }
-		part.recorder.stop();
+	if (hadRecording && current != null) reportStatus(current, true);
+	try {
+		recordingPart?.stop();
+	} finally {
+		// 종료 요청 뒤 원본 마이크 점유는 바로 해제한다. 녹음 destination과 복제 트랙은 최종 이벤트까지 별도로 유지한다.
+		recordingRawMicStream?.getTracks().forEach(track => track.stop());
+		recordingRawMicStream = null;
 	}
+	if (recordingPart == null) teardownRecording();
+}
+
+function clearRecordingMicrophone(): void {
+	for (const [track, source] of recordingSources) if (source.kind === 'mic') removeRecordingTrack(track);
+	recordingRawMicStream?.getTracks().forEach(track => track.stop());
+	recordingRawMicStream = null;
+}
+
+async function captureRecordingMicrophone(session: RecordingSession, room: Room): Promise<void> {
+	const active = () => recordingSession === session && !session.stopping && current === room;
+	if (!active()) return;
+	const revision = ++session.micRevision;
+	clearRecordingMicrophone();
+	try {
+		const raw = await navigator.mediaDevices.getUserMedia({
+			audio: { deviceId: prefer.s['voiceCall.inputDeviceId'] ?? undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+		});
+		if (!active() || session.micRevision !== revision) {
+			raw.getTracks().forEach(track => track.stop());
+			return;
+		}
+		// 장치를 얻는 동안 LiveKit이 발행한 대체 입력도 제거해 같은 마이크를 두 번 섞지 않는다.
+		clearRecordingMicrophone();
+		recordingRawMicStream = raw;
+		syncRecordingMicrophone();
+		const track = raw.getAudioTracks()[0];
+		if (track != null) addRecordingTrack(track, 'mic');
+	} catch {
+		if (!active() || session.micRevision !== revision || livekit == null) return;
+		const mic = room.localParticipant.getTrackPublication(livekit.Track.Source.Microphone)?.track;
+		if (mic?.mediaStreamTrack != null) addRecordingTrack(mic.mediaStreamTrack, 'mic');
+	}
+}
+
+function syncRecordingMicrophone(): void {
+	const enabled = state.micEnabled && !state.deafened;
+	for (const track of recordingRawMicStream?.getAudioTracks() ?? []) track.enabled = enabled;
+	if (recordingMicBus != null) recordingMicBus.gain.value = enabled ? 1 : 0;
 }
 
 /** follow the room owner's recording setting while in the call; recording stops when it is turned off */
@@ -669,9 +1210,6 @@ export async function leaveVoiceCall(): Promise<void> {
 export async function setMicEnabled(enabled: boolean): Promise<void> {
 	const room = current;
 	if (room == null) return;
-	if (recordingRawMicStream != null) {
-		for (const track of recordingRawMicStream.getAudioTracks()) track.enabled = enabled;
-	}
 	prefer.commit('voiceCall.micEnabled', enabled);
 	if (enabled) {
 		// スピーカーを切ったままマイクだけを入れると、聞こえないまま話すことになる。マイクが入ったらスピーカーも戻す。
@@ -694,6 +1232,7 @@ export async function restartMicrophone(): Promise<void> {
 export function setDeafened(deafened: boolean): void {
 	deafenRevision++;
 	state.deafened = deafened;
+	syncRecordingMicrophone();
 	if (current == null) return;
 	const room = current;
 	applyVolumes(room);
@@ -760,9 +1299,13 @@ export function activeAudioDeviceId(kind: 'audioinput' | 'audiooutput'): string 
 
 export async function selectAudioDevice(kind: 'audioinput' | 'audiooutput', deviceId: string): Promise<void> {
 	prefer.commit(kind === 'audioinput' ? 'voiceCall.inputDeviceId' : 'voiceCall.outputDeviceId', deviceId);
-	if (current == null) return;
-	await current.switchActiveDevice(kind, deviceId);
-	if (kind === 'audioinput' && current != null) startLocalMeter(current);
+	const room = current;
+	if (room == null) return;
+	await room.switchActiveDevice(kind, deviceId);
+	if (kind === 'audioinput' && current != null) {
+		startLocalMeter(current);
+		if (current === room && recordingSession != null) await captureRecordingMicrophone(recordingSession, room);
+	}
 }
 
 export function canShareScreen(): boolean {
@@ -896,24 +1439,45 @@ function hasLowerLayer(publication: RemoteTrackPublication): boolean {
 	return publication.simulcasted === true;
 }
 
+// 녹화 중이면 시청·미리보기와 무관하게 원격 공유를 구독한다. 녹화가 끝나면 시청·미리보기 기준으로 되돌린다.
+function isRecordingActive(): boolean {
+	return recordingSession != null && !recordingSession.stopping;
+}
+
+function resyncAllSubscriptions(): void {
+	if (current == null || livekit == null) return;
+	for (const participant of current.remoteParticipants.values()) {
+		for (const publication of participant.trackPublications.values()) {
+			applySubscription(livekit, publication, participant);
+		}
+	}
+}
+
 // 見ている共有画面は高い画質で、プレビューだけを出している共有画面は低い層だけを受け取り、どちらでもなければ受け取らない。
-// 低い層の無い共有画面はプレビューのためには受け取らない (プレビューは共有のアイコンのままになる)。
+// 낮은 층이 없는 공유 화면은 미리보기만을 위해서는 받지 않는다(미리보기는 공유 아이콘 그대로).
 // adaptiveStream も効いているので、映している要素が小さければ、ここで決めた上限よりさらに低い層になる
 function syncScreenShareSubscription(identity: string): void {
 	if (current == null || livekit == null) return;
 	const watched = state.watchingIdentities.includes(identity);
+	const recording = isRecordingActive();
+	const wanted = watched || recording;
+	// 시청 시작·종료에 맞춰 공유 소리의 재생 여부도 갱신한다 (녹화 중 구독은 유지)
+	const participant = current.remoteParticipants.get(identity);
+	if (participant != null) applyVolume(participant);
 	for (const publication of current.remoteParticipants.get(identity)?.trackPublications.values() ?? []) {
-		if (publication.source === livekit.Track.Source.ScreenShareAudio) publication.setSubscribed(watched);
+		if (publication.source === livekit.Track.Source.ScreenShareAudio) publication.setSubscribed(wanted);
 	}
 	const publication = screenSharePublicationOf(current, identity);
 	if (publication == null) return;
-	if (!watched && !(isScreenSharePreviewed(identity) && hasLowerLayer(publication))) {
+	if (!wanted && !(isScreenSharePreviewed(identity) && hasLowerLayer(publication))) {
 		if (publication.isDesired) publication.setSubscribed(false);
 		return;
 	}
 	// 画質の指定は受け取る希望を出してからでないと無視される
 	if (!publication.isDesired) publication.setSubscribed(true);
-	publication.setVideoQuality(watched ? livekit.VideoQuality.HIGH : livekit.VideoQuality.LOW);
+	publication.setVideoQuality(wanted ? livekit.VideoQuality.HIGH : livekit.VideoQuality.LOW);
+	// 녹화 중에는 시청 요소가 없어도 adaptiveStream이 영상을 멈추지 않도록 강제로 켠다
+	if (recording) publication.setEnabled(true);
 }
 
 function forgetScreenShare(identity: string): void {
@@ -948,12 +1512,14 @@ async function enableMicrophone(room: Room, undeafenAt: number | null = null): P
 			await disableMicrophone(room).catch(() => reportStatus(room));
 			return;
 		}
+		syncRecordingMicrophone();
 		startLocalMeter(room);
 		reportStatus(room);
 	} catch {
 		// マイクが無い・許可されない場合でも、聞くだけの参加者として通話に残る
 		if (current !== room) return;
 		state.micEnabled = false;
+		syncRecordingMicrophone();
 		stopLocalMeter?.();
 		reportStatus(room);
 		os.toast(i18n.ts._voiceCall.micUnavailable);
@@ -964,6 +1530,7 @@ async function disableMicrophone(room: Room): Promise<void> {
 	await room.localParticipant.setMicrophoneEnabled(false, captureOptions());
 	if (current !== room) return;
 	state.micEnabled = false;
+	syncRecordingMicrophone();
 	stopLocalMeter?.();
 	unwatchMicrophoneTrack?.();
 	reportStatus(room);
@@ -982,7 +1549,9 @@ function volumeOf(identity: string, audio: ParticipantAudio): number {
 function applyVolume(participant: RemoteParticipant): void {
 	const { Track } = livekit!;
 	participant.setVolume(volumeOf(participant.identity, 'voice'), Track.Source.Microphone);
-	participant.setVolume(volumeOf(participant.identity, 'screenShare'), Track.Source.ScreenShareAudio);
+	// 녹화 때문에 구독한 공유 소리는 시청할 때만 스피커로 재생한다. 녹화 입력은 별도의 탭이라 음량과 무관하다.
+	const watching = state.watchingIdentities.includes(participant.identity);
+	participant.setVolume(watching ? volumeOf(participant.identity, 'screenShare') : 0, Track.Source.ScreenShareAudio);
 }
 
 function applySubscription(lk: LiveKit, publication: TrackPublication, participant: RemoteParticipant): void {
@@ -992,7 +1561,7 @@ function applySubscription(lk: LiveKit, publication: TrackPublication, participa
 			remote.setSubscribed(true);
 			break;
 		case lk.Track.Source.ScreenShareAudio:
-			remote.setSubscribed(state.watchingIdentities.includes(participant.identity));
+			remote.setSubscribed(state.watchingIdentities.includes(participant.identity) || isRecordingActive());
 			break;
 		case lk.Track.Source.ScreenShare:
 			if (!state.screenShareIdentities.includes(participant.identity)) {
@@ -1016,15 +1585,11 @@ function bindRoomEvents(lk: LiveKit, room: Room): void {
 	room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
 		if (!isCurrent()) return;
 		if (track.kind === Track.Kind.Audio) {
-			if (publication.source === Track.Source.ScreenShareAudio) {
-				console.info(`[screen-share] received audio channels=${track.mediaStreamTrack.getSettings().channelCount ?? '?'}`);
-			}
 			addRecordingTrack(track.mediaStreamTrack, 'others');
 			window.document.body.appendChild(track.attach());
 			applyVolume(participant);
 			return;
 		}
-		// arti: the recording hook must not take the screen share branch, or a remote share is never shown
 		if (track.kind === Track.Kind.Video) addRecordingVideo(track.mediaStreamTrack, publication.source === Track.Source.ScreenShare);
 		if (publication.source === Track.Source.ScreenShare) {
 			screenShareTracks.set(participant.identity, track);
@@ -1061,14 +1626,15 @@ function bindRoomEvents(lk: LiveKit, room: Room): void {
 		if (!isCurrent()) return;
 		if (publication.source === Track.Source.Microphone) {
 			startLocalMeter(room);
-			if (track != null) addRecordingTrack(track.mediaStreamTrack, 'mic');
+			if (track != null && recordingRawMicStream == null) {
+				for (const [input, source] of recordingSources) if (source.kind === 'mic') removeRecordingTrack(input);
+				addRecordingTrack(track.mediaStreamTrack, 'mic');
+			}
 			return;
 		}
 		if (publication.source === Track.Source.ScreenShareAudio) {
-			if (track != null) {
-				console.info(`[screen-share] local capture audio channels=${track.mediaStreamTrack.getSettings().channelCount ?? '?'}`);
-				addRecordingTrack(track.mediaStreamTrack, 'mic');
-			}
+			// my own tab audio is not played to my speakers, so it only reaches the recording here
+			if (track != null) addRecordingTrack(track.mediaStreamTrack, 'others');
 			return;
 		}
 		if (publication.source !== Track.Source.ScreenShare || track == null) return;
@@ -1099,6 +1665,7 @@ function bindRoomEvents(lk: LiveKit, room: Room): void {
 		// オーナーによる強制ミュート
 		if (participant === room.localParticipant && publication.source === Track.Source.Microphone) {
 			state.micEnabled = false;
+			syncRecordingMicrophone();
 			stopLocalMeter?.();
 			reportStatus(room);
 		}
@@ -1196,6 +1763,7 @@ function resetState(): void {
 	state.status = 'idle';
 	state.room = null;
 	state.micEnabled = false;
+	syncRecordingMicrophone();
 	state.deafened = false;
 	state.audioBlocked = false;
 	state.speakingIdentities = [];
