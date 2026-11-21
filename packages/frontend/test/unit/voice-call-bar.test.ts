@@ -1,0 +1,178 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/vue';
+import { nextTick, unref } from 'vue';
+
+const mocks = vi.hoisted(() => ({
+	popupMenu: vi.fn(),
+	setMicEnabled: vi.fn(),
+	restartMicrophone: vi.fn(),
+	inUse: { audioinput: undefined as string | undefined, audiooutput: undefined as string | undefined },
+	someoneRecording: { value: false },
+}));
+
+vi.mock('@/os.js', () => ({ popupMenu: mocks.popupMenu, claimZIndex: () => 1000 }));
+vi.mock('@/preferences.js', async () => ({ prefer: (await import('./fake-prefer.js')).createFakePrefer() }));
+vi.mock('@/i.js', async importOriginal => ({ ...await importOriginal<typeof import('@/i.js')>(), $i: { policies: { canScreenShare: false } } }));
+// 録画の見張りは use-voice-call-recording-watch のテストの受け持ち。ここでは録画中かどうかだけを決める
+vi.mock('@/composables/use-voice-call-recording-watch.js', async () => {
+	const { computed } = await import('vue');
+	return { useVoiceCallRecordingWatch: () => ({ someoneRecording: computed(() => mocks.someoneRecording.value), recordingIdentities: computed(() => []) }) };
+});
+vi.mock('@/utility/voice-call.js', async importOriginal => {
+	const actual = await importOriginal<typeof import('@/utility/voice-call.js')>();
+	const { reactive } = await import('vue');
+	const voiceCall = reactive({ status: 'connected', room: { id: 'r1', name: 'room 1' }, micEnabled: true, deafened: false, audioBlocked: false, screenSharing: false });
+	return {
+		voiceCall,
+		canShareScreen: () => false,
+		canSelectAudioOutput: async () => true,
+		leaveVoiceCall: vi.fn(),
+		resumeAudio: vi.fn(),
+		setDeafened: vi.fn(),
+		setMicEnabled: mocks.setMicEnabled,
+		restartMicrophone: mocks.restartMicrophone,
+		startScreenShare: vi.fn(),
+		stopScreenShare: vi.fn(),
+		// 選択の保存と読み出しは本物を使う。ここでは通話を張らないので、本物が 'default' に落ちたときだけ通話中のデバイスを補う
+		activeAudioDeviceId: (kind: 'audioinput' | 'audiooutput') => {
+			const id = actual.activeAudioDeviceId(kind);
+			return id === 'default' ? mocks.inUse[kind] ?? 'default' : id;
+		},
+		selectAudioDevice: actual.selectAudioDevice,
+	};
+});
+
+import type { FakePrefer } from './fake-prefer.js';
+import { prefer as mockedPrefer } from '@/preferences.js';
+import XVoiceCallBar from '@/ui/_common_/voice-call-bar.vue';
+import { voiceCall } from '@/utility/voice-call.js';
+import { i18n } from '@/i18n.js';
+
+const prefer = mockedPrefer as unknown as FakePrefer;
+
+const devices = [
+	{ kind: 'audioinput', deviceId: 'default', label: 'Default' },
+	{ kind: 'audioinput', deviceId: 'mic-1', label: 'Mic 1' },
+	{ kind: 'audioinput', deviceId: 'mic-2', label: 'Mic 2' },
+];
+
+async function openMicMenu() {
+	render(XVoiceCallBar, { global: { stubs: { MkA: { template: '<a><slot /></a>' } } } });
+	await fireEvent.click(screen.getAllByRole('button').find(b => b.getAttribute('aria-label') != null && b.querySelector('.ti-settings'))!);
+	await vi.waitFor(() => expect(mocks.popupMenu).toHaveBeenCalled());
+	const items = mocks.popupMenu.mock.calls[0][0] as any[];
+	return await items[0].children() as any[];
+}
+
+beforeEach(() => {
+	mocks.popupMenu.mockReset();
+	mocks.setMicEnabled.mockReset().mockResolvedValue(undefined);
+	mocks.restartMicrophone.mockReset().mockResolvedValue(undefined);
+	mocks.inUse.audioinput = undefined;
+	mocks.someoneRecording.value = false;
+	prefer.reset({
+		'voiceCall.inputDeviceId': null,
+		'voiceCall.outputDeviceId': null,
+		'voiceCall.echoCancellation': true,
+		'voiceCall.noiseSuppression': true,
+		'voiceCall.autoGainControl': true,
+		'voiceCall.micEnabled': true,
+		'voiceCall.screenShareQuality': 'sharp',
+		'voiceCall.screenShareAudio': true,
+	});
+	Object.defineProperty(window.navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => devices } });
+});
+
+afterEach(() => {
+	cleanup();
+});
+
+describe('voice call bar device menu', () => {
+	test('marks the picked device right away while the menu stays open', async () => {
+		mocks.inUse.audioinput = 'mic-1';
+		const items = await openMicMenu();
+		const mic1 = items.find(i => i.text === 'Mic 1');
+		const mic2 = items.find(i => i.text === 'Mic 2');
+		expect(unref(mic1.active)).toBe(true);
+		expect(unref(mic2.active)).toBe(false);
+
+		mic2.action();
+		await nextTick();
+
+		expect(unref(mic2.active)).toBe(true);
+		expect(unref(mic1.active)).toBe(false);
+	});
+
+	test('marks the device in use when none was picked', async () => {
+		mocks.inUse.audioinput = 'mic-2';
+		const items = await openMicMenu();
+		expect(items.filter(i => unref(i.active)).map(i => i.text)).toEqual(['Mic 2']);
+	});
+
+	test('checks nothing when the device in use is not listed', async () => {
+		mocks.inUse.audioinput = 'gone';
+		const items = await openMicMenu();
+		expect(items.some(i => unref(i.active))).toBe(false);
+	});
+});
+
+describe('voice call bar audio processing', () => {
+	test.each([
+		'voiceCall.echoCancellation',
+		'voiceCall.noiseSuppression',
+		'voiceCall.autoGainControl',
+	])('turning %s off mid-call reopens the mic so the change applies', async key => {
+		render(XVoiceCallBar, { global: { stubs: { MkA: { template: '<a><slot /></a>' } } } });
+		await nextTick();
+
+		prefer.commit(key, false);
+		await nextTick();
+		await Promise.resolve();
+
+		// 入れ直しは自分で選んだマイクの入/切 (次の参加でも使う) を書き換えない
+		expect(mocks.restartMicrophone).toHaveBeenCalledTimes(1);
+		expect(mocks.setMicEnabled).not.toHaveBeenCalled();
+	});
+});
+
+describe('voice call bar microphone activity', () => {
+	test('shows local microphone input outside the room and clears it when muted or reconnecting', async () => {
+		const original = { status: voiceCall.status, micEnabled: voiceCall.micEnabled, localSpeaking: voiceCall.localSpeaking };
+		try {
+			Object.assign(voiceCall, { status: 'connected', micEnabled: true, localSpeaking: false });
+			render(XVoiceCallBar, { global: { stubs: { MkA: { template: '<a><slot /></a>' } } } });
+			expect(screen.getByRole('img', { name: i18n.ts._voiceCall.micOn })).toBeTruthy();
+			// リンクの名前は行き先のまま、マイクの状態は説明として読まれる
+			const link = screen.getByRole('img', { name: i18n.ts._voiceCall.micOn }).closest('a')!;
+			expect(link.getAttribute('aria-describedby')!.split(' ')).toContain(screen.getByRole('img', { name: i18n.ts._voiceCall.micOn }).id);
+			Object.assign(voiceCall, { localSpeaking: true });
+			await nextTick();
+			expect(screen.getByRole('img', { name: i18n.ts._voiceCall.micInputDetected })).toBeTruthy();
+			Object.assign(voiceCall, { status: 'reconnecting' });
+			await nextTick();
+			expect(screen.queryByRole('img', { name: i18n.ts._voiceCall.micInputDetected })).toBeNull();
+			Object.assign(voiceCall, { status: 'connected', micEnabled: false });
+			await nextTick();
+			expect(screen.getByRole('img', { name: i18n.ts._voiceCall.micMuted })).toBeTruthy();
+		} finally {
+			Object.assign(voiceCall, original);
+		}
+	});
+});
+
+describe('voice call bar recording badge', () => {
+	test('shows that the call is being recorded outside the room, and nothing otherwise', () => {
+		render(XVoiceCallBar, { global: { stubs: { MkA: { template: '<a><slot /></a>' } } } });
+		expect(screen.queryByRole('status', { name: i18n.ts._voiceCall.recordingInProgress })).toBeNull();
+		cleanup();
+
+		mocks.someoneRecording.value = true;
+		render(XVoiceCallBar, { global: { stubs: { MkA: { template: '<a><slot /></a>' } } } });
+		expect(screen.getByRole('status', { name: i18n.ts._voiceCall.recordingInProgress }).textContent).toContain(i18n.ts._voiceCall.recording);
+	});
+});
