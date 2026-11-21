@@ -15545,4 +15545,54 @@ export interface Locale extends ILocale {
          */
         "keepRunError": string;
     };
+    /**
+     * 外部サイトへのリンク警告 除外リスト
+     */
+    "trustedLinkUrlPatterns": string;
+    /**
+     * スペースで区切るとAND指定になり、改行で区切るとOR指定になります。スラッシュで囲むと正規表現になります。ドメイン名だけ書くと後方一致になります。
+     */
+    "trustedLinkUrlPatternsDescription": string;
+    /**
+     * 開く
+     */
+    "open": string;
+    "_externalNavigationWarning": {
+        /**
+         * 外部サイトに移動します
+         */
+        "title": string;
+        /**
+         * {host}を離れて外部サイトに移動します
+         */
+        "description": ParameterizedString<"host">;
+        /**
+         * このデバイスで今後このドメインを信頼する
+         */
+        "trustThisDomain": string;
+        /**
+         * 外部サイトに移動する際の警告
+         */
+        "externalNavigationWarning": string;
+        /**
+         * 外部サイトに移動する際の警告を表示
+         */
+        "enableExternalNavigationWarning": string;
+        /**
+         * 信頼するドメインリスト
+         */
+        "trustedDomainList": string;
+        /**
+         * `http://`と`https://`を省略して入力してください。
+         */
+        "trustedDomainListDescription": string;
+        /**
+         * 改行で区切って設定します
+         */
+        "trustedDomainListDescription2": string;
+        /**
+         * 信頼するドメインリストのリセット
+         */
+        "deleteTrustedDomainList": string;
+    };
 }

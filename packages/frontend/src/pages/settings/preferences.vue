@@ -506,6 +506,32 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkFolder>
 			</SearchMarker>
 
+			<SearchMarker v-slot="slotProps" :label="i18n.ts._externalNavigationWarning.externalNavigationWarning" :keywords="['external', 'navigation', 'warning']">
+				<MkFolder :defaultOpen="slotProps.isParentOfTarget">
+					<template #label><SearchLabel>{{ i18n.ts._externalNavigationWarning.externalNavigationWarning }}</SearchLabel></template>
+					<template #icon><SearchIcon><i class="ti ti-external-link"></i></SearchIcon></template>
+
+					<div class="_gaps_m">
+						<MkPreferenceContainer k="externalNavigationWarning">
+							<MkSwitch v-model="externalNavigationWarning">
+								<template #label><SearchLabel>{{ i18n.ts._externalNavigationWarning.enableExternalNavigationWarning }}</SearchLabel></template>
+							</MkSwitch>
+						</MkPreferenceContainer>
+						<MkTextarea v-model="trustedDomains">
+							<template #label><SearchLabel>{{ i18n.ts._externalNavigationWarning.trustedDomainList }}</SearchLabel></template>
+							<template #caption>
+								<i class="ti ti-alert-triangle" style="color: var(--MI_THEME-warn);"></i>
+								<SearchText>{{ i18n.ts._externalNavigationWarning.trustedDomainListDescription }}<br>{{ i18n.ts._externalNavigationWarning.trustedDomainListDescription2 }}</SearchText>
+							</template>
+						</MkTextarea>
+						<div class="_buttons">
+							<MkButton primary :disabled="!trustedDomainsChanged" @click="trustedDomainsSave()"><i class="ti ti-device-floppy"></i> {{ i18n.ts.save }}</MkButton>
+							<MkButton :disabled="!prefer.r.trustedDomains.value.length" danger @click="removeTrustedDomains"><i class="ti ti-trash"></i> {{ i18n.ts._externalNavigationWarning.deleteTrustedDomainList }}</MkButton>
+						</div>
+					</div>
+				</MkFolder>
+			</SearchMarker>
+
 			<template v-if="$i.policies.chatAvailability !== 'unavailable'">
 				<SearchMarker v-slot="slotProps" :keywords="['chat', 'messaging']">
 					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
@@ -946,6 +972,7 @@ import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { langs } from '@@/js/config.js';
 import * as Misskey from 'misskey-js';
 import MkSwitch from '@/components/MkSwitch.vue';
+import MkTextarea from '@/components/MkTextarea.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkRadios from '@/components/MkRadios.vue';
 import MkRange from '@/components/MkRange.vue';
@@ -976,6 +1003,9 @@ const $i = ensureSignin();
 const lang = ref(miLocalStorage.getItem('lang'));
 const dataSaver = ref(prefer.s.dataSaver);
 const realtimeMode = store.model('realtimeMode');
+const trustedDomains = ref(prefer.s.trustedDomains.join('\n'));
+const externalNavigationWarning = prefer.model('externalNavigationWarning');
+const trustedDomainsChanged = computed(() => trustedDomains.value !== prefer.r.trustedDomains.value.join('\n'));
 
 const overridedDeviceKind = prefer.model('overridedDeviceKind');
 const pollingInterval = prefer.model('pollingInterval');
@@ -1194,6 +1224,33 @@ function disableAllDataSaver() {
 	(Object.keys(g) as (keyof typeof g)[]).forEach((key) => { g[key] = false; });
 
 	dataSaver.value = g;
+}
+
+function removeTrustedDomains() {
+	async function main() {
+		await prefer.commit('trustedDomains', []);
+
+		// Refresh filtered list to signal to the user how they've been saved
+		trustedDomains.value = '';
+	}
+
+	os.promiseDialog(main());
+}
+
+async function trustedDomainsSave() {
+	async function main() {
+		const domains = trustedDomains.value
+			.trim().split('\n')
+			.map(el => el.trim())
+			.filter(el => el);
+
+		await prefer.commit('trustedDomains', domains);
+
+		// Refresh filtered list to signal to the user how they've been saved
+		trustedDomains.value = domains.join('\n');
+	}
+
+	await os.promiseDialog(main());
 }
 
 watch(dataSaver, (to) => {

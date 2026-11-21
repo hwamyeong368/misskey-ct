@@ -4133,3 +4133,18 @@ _noteCleanup:
   confirmationError: "オン・オフの切り替えには確認が必要です。"
   selectionError: "選択したルールを利用できません。再読み込みしてルールを選び直してください。"
   keepRunError: "残すルールでは自動整理を使えません。"
+
+trustedLinkUrlPatterns: "外部サイトへのリンク警告 除外リスト"
+trustedLinkUrlPatternsDescription: "スペースで区切るとAND指定になり、改行で区切るとOR指定になります。スラッシュで囲むと正規表現になります。ドメイン名だけ書くと後方一致になります。"
+open: "開く"
+
+_externalNavigationWarning:
+  title: "外部サイトに移動します"
+  description: "{host}を離れて外部サイトに移動します"
+  trustThisDomain: "このデバイスで今後このドメインを信頼する"
+  externalNavigationWarning: "外部サイトに移動する際の警告"
+  enableExternalNavigationWarning: "外部サイトに移動する際の警告を表示"
+  trustedDomainList: "信頼するドメインリスト"
+  trustedDomainListDescription: "`http://`と`https://`を省略して入力してください。"
+  trustedDomainListDescription2: "改行で区切って設定します"
+  deleteTrustedDomainList: "信頼するドメインリストのリセット"

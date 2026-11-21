@@ -28,6 +28,7 @@ import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { globalEvents } from '@/events.js';
 import { translateWithState } from '@/utility/translate-with-state.js';
+import { openExternalUrl } from '@/utility/open-external-url.js';
 
 const isInBrowserTranslationAvailable = (
 	'LanguageDetector' in window &&
@@ -415,7 +416,7 @@ export function getNoteMenu(props: {
 				icon: 'ti ti-external-link',
 				text: i18n.ts.showOnRemote,
 				action: () => {
-					window.open(link, '_blank', 'noopener');
+					openExternalUrl(link);
 				},
 			});
 		} else {
@@ -626,7 +627,7 @@ export function getNoteMenu(props: {
 				icon: 'ti ti-external-link',
 				text: i18n.ts.showOnRemote,
 				action: () => {
-					window.open(link, '_blank', 'noopener');
+					openExternalUrl(link);
 				},
 			});
 		} else {

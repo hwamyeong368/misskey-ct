@@ -617,6 +617,14 @@ export const PREF_DEF = definePreferences({
 		},
 	},
 
+	// - Settings/Navigate to an external site warning
+	externalNavigationWarning: {
+		default: true,
+	},
+	trustedDomains: {
+		default: [] as string[],
+	},
+
 	'experimental.stackingRouterView': {
 		default: false,
 	},

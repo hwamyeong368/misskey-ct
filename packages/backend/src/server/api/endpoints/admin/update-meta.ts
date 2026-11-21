@@ -195,6 +195,12 @@ export const paramDef = {
 				type: 'string',
 			}
 		},
+		trustedLinkUrlPatterns: {
+			type: 'array', nullable: true,
+			items: {
+				type: 'string',
+			},
+		},
 		federation: {
 			type: 'string',
 			enum: ['all', 'none', 'specified'],
@@ -744,6 +750,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (Array.isArray(ps.urlPreviewSensitiveList)) {
 				set.urlPreviewSensitiveList = ps.urlPreviewSensitiveList.filter(Boolean);
+			}
+
+			if (Array.isArray(ps.trustedLinkUrlPatterns)) {
+				set.trustedLinkUrlPatterns = ps.trustedLinkUrlPatterns.filter(Boolean);
 			}
 
 			if (ps.federation !== undefined) {
