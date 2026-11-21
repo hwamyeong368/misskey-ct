@@ -28,7 +28,7 @@ import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.j
 import type { MiUserKeypair } from '@/models/UserKeypair.js';
 import type { IChatRoomVoiceState } from '@/core/activitypub/type.js';
 import { reportedVoiceStatus } from '@/core/voice-participant-status.js';
-import type { UsersRepository, UserProfilesRepository, NotesRepository, DriveFilesRepository, PollsRepository, MiMeta } from '@/models/_.js';
+import type { UsersRepository, UserProfilesRepository, NotesRepository, DriveFilesRepository, ChatMessagesRepository, PollsRepository, MiMeta } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { RoleService } from '@/core/RoleService.js';
@@ -51,6 +51,7 @@ import {
 	buildChatRoomUpdate,
 	buildChatUpdate,
 	type ChatPayloadOptions,
+	chatMessageUri,
 	chatRoomUriForOwner,
 } from './misc/chat-payloads.js';
 import type { IAccept, IActivity, IAdd, IAnnounce, IApDocument, IApEmoji, IApHashtag, IApImage, IApMention, IBlock, ICreate, IDelete, IFlag, IFollow, IInvite, IKey, ILike, IMove, IObject, IPost, IQuestion, IRead, IReject, IRemove, ITombstone, IUndo, IUpdate } from './type.js';
@@ -107,6 +108,9 @@ export class ApRendererService {
 
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
+
+		@Inject(DI.chatMessagesRepository)
+		private chatMessagesRepository: ChatMessagesRepository,
 
 		@Inject(DI.pollsRepository)
 		private pollsRepository: PollsRepository,
@@ -866,7 +870,7 @@ export class ApRendererService {
 		return buildChatNote(message, fromUser, toUsers, roomId, await this.chatPayloadOptions(message, roomUri));
 	}
 
-	private async chatPayloadOptions(message: MiChatMessage, roomUri?: string): Promise<ChatPayloadOptions> {
+	private async chatPayloadOptions(message: MiChatMessage, roomUri?: string, forHistory = false): Promise<ChatPayloadOptions> {
 		// Files are not referred to by a foreign key, so one can be gone by now. The database returns them in no particular order.
 		const fileIds: MiDriveFile['id'][] = message.fileIds ?? [];
 		const files = fileIds.length > 0 ? await this.driveFilesRepository.findBy({ id: In(fileIds) }) : [];
@@ -875,10 +879,18 @@ export class ApRendererService {
 		const emojis = await this.getEmojis(message.emojis);
 		const apemojis = emojis.filter(emoji => !emoji.localOnly).map(emoji => this.renderEmoji(emoji));
 
+		// 원문의 id만 주소로 바꿔 싣는다. 내용은 싣지 않으므로 지워진 원문도 받는 쪽이 "삭제된 메시지"로 보이게 주소를 보낸다.
+		const replyTarget = message.replyToId != null ? await this.chatMessagesRepository.findOneBy({ id: message.replyToId }) : null;
+
+		// 이력에는 지워졌거나 작성자가 정지된 글이 실리지 않아, 받는 서버가 그 원문을 영영 받지 못한다. 이력 쪽에서는 그 답장의 원문 주소를 싣지 않는다.
+		const author = forHistory && replyTarget?.fromUserId != null ? await this.usersRepository.findOneBy({ id: replyTarget.fromUserId }) : null;
+		const omitReplyUri = forHistory && replyTarget != null && (replyTarget.deletedAt != null || author?.isSuspended === true);
+
 		return {
 			baseUrl: this.config.url,
 			published: this.idService.parse(message.id).date.toISOString(),
 			roomUri,
+			...(omitReplyUri ? {} : replyTarget != null ? { replyToUri: replyTarget.sourceUri ?? chatMessageUri(replyTarget, this.config.url) } : message.replyToUri != null ? { replyToUri: message.replyToUri } : {}),
 			attachment,
 			tag: apemojis,
 			...(message.toRoomChannelId != null ? await this.chatRoomChannelService.messageFields(message) : {}),
@@ -891,7 +903,7 @@ export class ApRendererService {
 	 */
 	@bindThis
 	public async renderChatHistoryNote(message: MiChatMessage, authorUri: string, remoteEmojis: MiEmoji[] | null, toUsers: MiUser[], roomUri: string): Promise<IPost> {
-		const options = await this.chatPayloadOptions(message, roomUri);
+		const options = await this.chatPayloadOptions(message, roomUri, true);
 		return buildChatNote(message, { id: '', host: null }, toUsers, undefined, {
 			...options,
 			authorUri,
