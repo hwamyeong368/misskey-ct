@@ -18,7 +18,7 @@ afterEach(() => {
 test('the update notice opens the release notes without an opener', async () => {
 	const open = vi.spyOn(window, 'open').mockReturnValue(null);
 	const { getByRole } = render(MkUpdated, {
-		global: { stubs: { MkModal: { emits: ['click'], template: '<div><slot /></div>' }, MkSparkle: { template: '<div><slot /></div>' }, Mfm: true } },
+		global: { stubs: { MkModal: { emits: ['click'], template: '<div><slot /></div>', methods: { close: () => {} } }, MkSparkle: { template: '<div><slot /></div>' }, Mfm: true } },
 	});
 
 	await fireEvent.click(getByRole('button', { name: i18n.ts.whatIsNew }));
