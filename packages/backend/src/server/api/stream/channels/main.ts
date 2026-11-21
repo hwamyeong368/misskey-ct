@@ -39,6 +39,18 @@ export class MainChannel extends Channel {
 	@bindThis
 	private async onData(data: EventTypesToEventPayload<MainEventTypes>) {
 		switch (data.type) {
+			case 'signin': {
+				if (this.connection.token != null) return;
+				break;
+			}
+			case 'newChatMessage': {
+				if (this.connection.token && !this.connection.token.permission.includes('read:chat')) return;
+				break;
+			}
+			case 'chatRoomVoiceState': {
+				if (this.connection.token && !this.connection.token.permission.includes('read:chat')) return;
+				break;
+			}
 			case 'notification': {
 				// Ignore notifications from instances the user has muted
 				if (isUserFromMutedInstance(data.body, this.userMutedInstances)) return;

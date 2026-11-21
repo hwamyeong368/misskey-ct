@@ -120,6 +120,7 @@ export class Paginator<
 	public noPaging: boolean;
 	public searchQuery = ref<null | string>('');
 	private searchParamName: keyof E['req'] | 'search';
+	private readonly token?: string;
 	private canFetchDetection: 'safe' | 'limit' | null = null;
 	private aheadQueue: T[] = [];
 	private pendingOlderItems: T[] = [];
@@ -134,6 +135,7 @@ export class Paginator<
 
 	constructor(endpoint: Endpoint, props: {
 		limit?: number;
+		token?: string;
 		params?: E['req'] | (() => E['req']);
 		computedParams?: ComputedRef<E['req'] | null | undefined>;
 
@@ -172,6 +174,7 @@ export class Paginator<
 		searchParamName?: keyof E['req'];
 	}) {
 		this.endpoint = endpoint;
+		this.token = props.token;
 		this.useShallowRef = (props.useShallowRef ?? false) as SRef;
 		this.insertByIdOrder = props.insertByIdOrder ?? false;
 		if (this.useShallowRef) {
@@ -229,6 +232,12 @@ export class Paginator<
 		return this.items.value.map(x => x.id).sort().at(0);
 	}
 
+	private request(data: E['req']): Promise<T[]> {
+		return this.token === undefined
+			? misskeyApi<T[]>(this.endpoint, data)
+			: misskeyApi<T[]>(this.endpoint, data, this.token);
+	}
+
 	public async init(): Promise<void> {
 		this.items.value = [];
 		this.aheadQueue = [];
@@ -253,7 +262,7 @@ export class Paginator<
 			} : {}),
 		};
 
-		const apiRes = (await misskeyApi(this.endpoint, data).catch(_ => {
+		const apiRes = (await this.request(data).catch(_ => {
 			this.error.value = true;
 			this.fetching.value = false;
 			return null;
@@ -321,7 +330,7 @@ export class Paginator<
 			}),
 		};
 
-		const apiRes = (await misskeyApi<T[]>(this.endpoint, data).catch(_ => {
+		const apiRes = (await this.request(data).catch(_ => {
 			return null;
 		})) as T[] | null;
 
@@ -388,7 +397,7 @@ export class Paginator<
 			}),
 		};
 
-		const apiRes = (await misskeyApi<T[]>(this.endpoint, data).catch(_ => {
+		const apiRes = (await this.request(data).catch(_ => {
 			return null;
 		})) as T[] | null;
 

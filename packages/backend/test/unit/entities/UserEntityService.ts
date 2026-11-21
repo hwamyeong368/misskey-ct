@@ -4,7 +4,7 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { describe, expect, beforeAll, afterAll, test } from 'vitest';
+import { describe, expect, beforeAll, afterAll, test, vi } from 'vitest';
 import type { MiUser } from '@/models/User.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { GlobalModule } from '@/GlobalModule.js';
@@ -23,6 +23,7 @@ import { DI } from '@/di-symbols.js';
 import { AvatarDecorationService } from '@/core/AvatarDecorationService.js';
 import { RemoteAvatarDecorationService } from '@/core/RemoteAvatarDecorationService.js';
 import { ApPersonService } from '@/core/activitypub/models/ApPersonService.js';
+import { ApDbResolverService } from '@/core/activitypub/ApDbResolverService.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { PageEntityService } from '@/core/entities/PageEntityService.js';
 import { CustomEmojiService } from '@/core/CustomEmojiService.js';
@@ -145,6 +146,7 @@ describe('UserEntityService', () => {
 			const services = [
 				UserEntityService,
 				ApPersonService,
+				ApDbResolverService,
 				NoteEntityService,
 				PageEntityService,
 				CustomEmojiService,
@@ -204,6 +206,28 @@ describe('UserEntityService', () => {
 			await app.close();
 		});
 
+		test('packs saved move targets without resolving missing targets for visitors', async () => {
+			const uri = 'https://example.test/users/target';
+			const moved = await createUser({ movedToUri: uri });
+			const options = { schema: 'UserDetailed', resolveMovedTo: false } as const;
+			const resolvePerson = vi.spyOn(app.get(ApPersonService), 'resolvePerson')
+				.mockRejectedValue(new Error('No remote resolution in this test'));
+			try {
+				expect((await service.pack(moved, null, options)).movedTo).toBeNull();
+				expect(resolvePerson).not.toHaveBeenCalled();
+
+				const target = await createUser({ host: 'example.test', uri });
+				const packed = await service.packMany([moved], null, options);
+				expect(packed[0].movedTo).toBe(target.id);
+				expect(resolvePerson).not.toHaveBeenCalled();
+
+				resolvePerson.mockResolvedValue({ ...target, host: 'example.test', uri });
+				expect((await service.pack(moved, target, { schema: 'UserDetailed' })).movedTo).toBe(target.id);
+				expect(resolvePerson).toHaveBeenCalledWith(uri);
+			} finally {
+				resolvePerson.mockRestore();
+			}
+		});
 		test('UserLite', async() => {
 			const me = await createUser();
 			const who = await createUser();

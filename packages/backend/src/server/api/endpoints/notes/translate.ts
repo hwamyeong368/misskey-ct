@@ -5,6 +5,7 @@
 
 import { URLSearchParams } from 'node:url';
 import { Inject, Injectable } from '@nestjs/common';
+import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
@@ -19,6 +20,11 @@ export const meta = {
 
 	requireCredential: true,
 	kind: 'read:account',
+
+	limit: {
+		duration: ms('1minute'),
+		max: 120,
+	},
 
 	res: {
 		type: 'object',

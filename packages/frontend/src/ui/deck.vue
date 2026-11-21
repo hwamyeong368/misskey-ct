@@ -100,6 +100,7 @@ import XThemePreviewing from '@/ui/_common_/ThemePreviewing.vue';
 import * as os from '@/os.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
+import { mfmPlain } from '@/utility/mfm-plain.js';
 import { deviceKind } from '@/utility/device-kind.js';
 import { prefer } from '@/preferences.js';
 import { store } from '@/store.js';
@@ -226,7 +227,7 @@ async function deleteProfile() {
 
 	const { canceled } = await os.confirm({
 		type: 'warning',
-		text: i18n.tsx.deleteAreYouSure({ x: prefer.s['deck.profile'] }),
+		text: i18n.tsx.deleteAreYouSure({ x: mfmPlain(prefer.s['deck.profile']) }),
 	});
 	if (canceled) return;
 

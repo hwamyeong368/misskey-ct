@@ -42,6 +42,7 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { useStream } from '@/stream.js';
 import { i18n } from '@/i18n.js';
+import { mfmPlain } from '@/utility/mfm-plain.js';
 import { claimAchievement } from '@/utility/achievements.js';
 import { pleaseLogin } from '@/utility/please-login.js';
 import { $i } from '@/i.js';
@@ -97,7 +98,7 @@ async function onClick() {
 		if (isFollowing.value) {
 			const { canceled } = await os.confirm({
 				type: 'warning',
-				text: i18n.tsx.unfollowConfirm({ name: props.user.name || props.user.username }),
+				text: i18n.tsx.unfollowConfirm({ name: mfmPlain(props.user.name || props.user.username) }),
 			});
 
 			if (canceled) {
@@ -111,7 +112,7 @@ async function onClick() {
 		} else if (hasPendingFollowRequestFromYou.value) {
 			const { canceled } = await os.confirm({
 				type: 'question',
-				text: i18n.tsx.cancelFollowRequestConfirm({ name: props.user.name || props.user.username }),
+				text: i18n.tsx.cancelFollowRequestConfirm({ name: mfmPlain(props.user.name || props.user.username) }),
 			});
 
 			if (canceled) {
@@ -127,7 +128,7 @@ async function onClick() {
 			if (prefer.s.alwaysConfirmFollow) {
 				const { canceled } = await os.confirm({
 					type: 'question',
-					text: i18n.tsx.followConfirm({ name: props.user.name || props.user.username }),
+					text: i18n.tsx.followConfirm({ name: mfmPlain(props.user.name || props.user.username) }),
 				});
 
 				if (canceled) {
