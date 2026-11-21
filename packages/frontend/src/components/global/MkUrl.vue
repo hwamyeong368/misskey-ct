@@ -7,6 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <component
 	:is="self ? 'MkA' : 'a'" ref="el" :class="$style.root" class="_link" :[attr]="maybeRelativeUrl" :rel="rel ?? 'nofollow noopener'" :target="target"
 	:behavior="props.navigationBehavior"
+	@click.stop="(ev: MouseEvent) => warningExternalWebsite(ev, props.url)"
 	@contextmenu.stop="() => {}"
 >
 	<template v-if="!self">
@@ -32,6 +33,7 @@ import type { MkABehavior } from '@/components/global/MkA.vue';
 import * as os from '@/os.js';
 import { useTooltip } from '@/composables/use-tooltip.js';
 import { isEnabledUrlPreview } from '@/utility/url-preview.js';
+import { warningExternalWebsite } from '@/utility/warning-external-website.js';
 
 const props = withDefaults(defineProps<{
 	url: string;

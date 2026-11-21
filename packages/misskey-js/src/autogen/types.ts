@@ -6172,6 +6172,7 @@ export type components = {
                 dayOfWeek: number;
                 isSensitive?: boolean;
             }[];
+            trustedLinkUrlPatterns: string[];
             /** @default 0 */
             notesPerOneAd: number;
             enableEmail: boolean;
@@ -10956,6 +10957,7 @@ export interface operations {
                         urlPreviewUserAgent: string | null;
                         urlPreviewSummaryProxyUrl: string | null;
                         urlPreviewSensitiveList: string[];
+                        trustedLinkUrlPatterns: string[];
                         /** @enum {string} */
                         federation: 'all' | 'specified' | 'none';
                         federationHosts: string[];
@@ -14478,6 +14480,7 @@ export interface operations {
                     urlPreviewUserAgent?: string | null;
                     urlPreviewSummaryProxyUrl?: string | null;
                     urlPreviewSensitiveList?: string[] | null;
+                    trustedLinkUrlPatterns?: string[] | null;
                     /** @enum {string} */
                     federation?: 'all' | 'none' | 'specified';
                     federationHosts?: string[];

@@ -21,6 +21,7 @@ import { mainRouter } from '@/router.js';
 import { genEmbedCode } from '@/utility/get-embed-code.js';
 import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
+import { openExternalUrl } from '@/utility/open-external-url.js';
 
 export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router = mainRouter) {
 	const meId = $i ? $i.id : null;
@@ -199,7 +200,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 			text: i18n.ts.showOnRemote,
 			action: () => {
 				if (user.url == null) return;
-				window.open(user.url, '_blank', 'noopener');
+				openExternalUrl(user.url);
 			},
 		});
 	} else {

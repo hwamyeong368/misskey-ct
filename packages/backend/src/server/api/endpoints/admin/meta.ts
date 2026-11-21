@@ -560,6 +560,14 @@ export const meta = {
 					optional: false, nullable: false,
 				},
 			},
+			trustedLinkUrlPatterns: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+			},
 			federation: {
 				type: 'string',
 				enum: ['all', 'specified', 'none'],
@@ -779,6 +787,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				urlPreviewUserAgent: instance.urlPreviewUserAgent,
 				urlPreviewSummaryProxyUrl: instance.urlPreviewSummaryProxyUrl,
 				urlPreviewSensitiveList: instance.urlPreviewSensitiveList,
+				trustedLinkUrlPatterns: instance.trustedLinkUrlPatterns,
 				federation: instance.federation,
 				federationHosts: instance.federationHosts,
 				deliverSuspendedSoftware: instance.deliverSuspendedSoftware,
