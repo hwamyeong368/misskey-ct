@@ -9,6 +9,9 @@ _noteCleanup:
     age: My notes past the retention period
   title: Note cleanup
   keepDriveFiles: Keep attachments of deleted notes in the drive
+  keepDriveFilesOverridden: '"{option}" is on in the {link}, so attachments used only by the deleted notes are deleted too.'
+  keepDriveFilesScope: 'This applies only to notes deleted by note cleanup. To also delete attachments of notes you delete yourself, turn on "{option}" in the {link}.'
+  driveSettingsLink: Drive settings
   keep: Keep
   delete: Delete
   name: Rule name

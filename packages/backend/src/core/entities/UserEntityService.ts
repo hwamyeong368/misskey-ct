@@ -601,6 +601,7 @@ export class UserEntityService implements OnModuleInit {
 				receiveAnnouncementEmail: profile!.receiveAnnouncementEmail,
 				alwaysMarkNsfw: profile!.alwaysMarkNsfw,
 				autoSensitive: profile!.autoSensitive,
+				autoDeleteNoteFiles: profile!.autoDeleteNoteFiles,
 				carefulBot: profile!.carefulBot,
 				autoAcceptFollowed: profile!.autoAcceptFollowed,
 				notificationRequestsEnabled: profile!.notificationRequestsEnabled,

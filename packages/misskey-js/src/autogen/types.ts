@@ -4722,6 +4722,7 @@ export type components = {
             receiveAnnouncementEmail: boolean;
             alwaysMarkNsfw: boolean;
             autoSensitive: boolean;
+            autoDeleteNoteFiles: boolean;
             carefulBot: boolean;
             autoAcceptFollowed: boolean;
             notificationRequestsEnabled: boolean;
@@ -33562,6 +33563,7 @@ export interface operations {
                     receiveAnnouncementEmail?: boolean;
                     alwaysMarkNsfw?: boolean;
                     autoSensitive?: boolean;
+                    autoDeleteNoteFiles?: boolean;
                     /** @enum {string} */
                     followingVisibility?: 'public' | 'followers' | 'private';
                     /** @enum {string} */
@@ -35610,6 +35612,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     noteId: string;
+                    /** @default false */
+                    keepFiles?: boolean;
                 };
             };
         };

@@ -29,6 +29,13 @@ export class DriveFileUsageService {
 		// 下書き・予約投稿 (fileIds に GIN インデックスあり)
 		q.andWhere('NOT EXISTS (SELECT 1 FROM "note_draft" WHERE "note_draft"."userId" = :userId AND "note_draft"."fileIds" @> ARRAY[file.id]::varchar[])');
 
+		// ノート編集履歴 (CT は note_revision.payload.fileIds に保存)
+		q.andWhere(`NOT EXISTS (
+			SELECT 1 FROM "note_revision"
+			WHERE "note_revision"."editorId" = :userId
+			AND jsonb_path_exists("note_revision"."payload", '$.fileIds[*] ? (@ == $fid)', jsonb_build_object('fid', file.id))
+		)`);
+
 		// チャット
 		q.andWhere('NOT EXISTS (SELECT 1 FROM "chat_message" WHERE "chat_message"."fromUserId" = :userId AND "chat_message"."fileIds" @> ARRAY[file.id]::varchar[])');
 
