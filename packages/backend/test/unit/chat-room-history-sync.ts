@@ -101,7 +101,7 @@ function setup(options: Setup = {}) {
 		chatRoomsRepository: { findOneBy: vi.fn(async () => room), findOneByOrFail: vi.fn(async () => room) },
 		usersRepository: { findOneBy: vi.fn(async () => owner) },
 		emojisRepository: { findBy: vi.fn(async () => []), existsBy: vi.fn(async () => false) },
-		chatService: { applyPendingChatReactions, normalizeRemoteReaction: ChatService.prototype.normalizeRemoteReaction },
+		chatService: { applyPendingChatReactions, resolveReplyTarget: vi.fn(async () => ({ replyToId: null, replyToUri: null })), normalizeRemoteReaction: ChatService.prototype.normalizeRemoteReaction },
 		chatRoomChannelService: {
 			remoteChannel: vi.fn(async (_room: unknown, value: unknown) => options.channel != null ? options.channel(value) : null),
 			remoteRefs: vi.fn(async () => []),
