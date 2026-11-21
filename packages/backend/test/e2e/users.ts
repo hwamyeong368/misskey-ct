@@ -723,7 +723,7 @@ describe('ユーザー', () => {
 			status: 400, code: 'ACCESS_DENIED', id: 'cda8f8ce-89a6-4f92-8055-33bbe0c1464d',
 		});
 		await failedApiCall({ endpoint: 'admin/unset-mfa', parameters, user: root }, {
-			status: 400, code: 'ACCESS_DENIED', id: 'a32093d8-e6f9-4030-855b-dac6580f5f24',
+			status: 400, code: 'ACCESS_DENIED', id: 'cda8f8ce-89a6-4f92-8055-33bbe0c1464d',
 		});
 	});
 

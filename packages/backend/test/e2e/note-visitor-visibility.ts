@@ -58,7 +58,7 @@ describe('Remote notes embedded in local notes', () => {
 		expect(visitor.status).toBe(200);
 		expect(embed.status).toBe(200);
 		expect(embed.headers.get('cache-control')).toBe('no-store');
-		const context = parse(await embed.text()).getElementById('misskey_clientCtx');
+		const context = parse(await embed.text()).getElementById('misskey_embedCtx');
 		expect(context).not.toBeNull();
 		const embedded = (JSON.parse(context!.rawText) as { note: Misskey.entities.Note }).note;
 		for (const visible of [visitor.body, embedded]) {
