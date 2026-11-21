@@ -12,6 +12,9 @@ on:
       # This is a waste of chromatic build quota, so we don't run storybook CI on pull requests targets master.
       - master
 
+permissions:
+  contents: write
+
 jobs:
   build:
     # Chromatic is not likely to be available for fork repositories, so we disable for fork repositories.
@@ -22,12 +25,12 @@ jobs:
       NODE_OPTIONS: "--max_old_space_size=7168"
 
     steps:
-    - uses: actions/checkout@v7.0.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       if: github.event_name != 'pull_request_target'
       with:
         fetch-depth: 0
         submodules: true
-    - uses: actions/checkout@v7.0.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       if: github.event_name == 'pull_request_target'
       with:
         fetch-depth: 0
@@ -37,9 +40,9 @@ jobs:
       if: github.event_name == 'pull_request_target'
       run: git checkout "$(git rev-list --parents -n1 HEAD | cut -d" " -f3)"
     - name: Setup pnpm
-      uses: pnpm/action-setup@v6.0.10
+      uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
     - name: Use Node.js
-      uses: actions/setup-node@v7.0.0
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version-file: '.node-version'
         cache: 'pnpm'
@@ -59,7 +62,7 @@ jobs:
       if: github.event_name != 'pull_request_target' && github.ref != 'refs/heads/master'
       id: chromatic_push
       run: |
-        DIFF="${{ github.event.before }} HEAD"
+        DIFF="${BEFORE_SHA} HEAD"
         if [ "$DIFF" = "0000000000000000000000000000000000000000 HEAD" ]; then
           DIFF="HEAD"
         fi
@@ -73,6 +76,7 @@ jobs:
           echo "success=false" >> $GITHUB_OUTPUT
         fi
       env:
+        BEFORE_SHA: ${{ github.event.before }}
         CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
     - name: Publish to Chromatic
       if: github.event_name == 'pull_request_target'
@@ -82,15 +86,16 @@ jobs:
         if [ "$CHROMATIC_PARAMETER" = " --skip" ]; then
           echo "skip=true" >> $GITHUB_OUTPUT
         fi
-        BRANCH="${{ github.event.pull_request.head.user.login }}:$GITHUB_HEAD_REF"
+        BRANCH="${HEAD_USER_LOGIN}:$GITHUB_HEAD_REF"
         if [ "$BRANCH" = "misskey-dev:$GITHUB_HEAD_REF" ]; then
           BRANCH="$GITHUB_HEAD_REF"
         fi
         pnpm --filter frontend chromatic --exit-once-uploaded -d storybook-static --branch-name "$BRANCH" $(echo "$CHROMATIC_PARAMETER")
       env:
+        HEAD_USER_LOGIN: ${{ github.event.pull_request.head.user.login }}
         CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
     - name: Notify that Chromatic detects changes
-      uses: actions/github-script@v9
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       if: github.event_name != 'pull_request_target' && steps.chromatic_push.outputs.success == 'false'
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -102,7 +107,7 @@ jobs:
             body: 'Chromatic detects changes. Please [review the changes on Chromatic](https://www.chromatic.com/builds?appId=6428f7d7b962f0b79f97d6e4).'
           })
     - name: Upload Artifacts
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
       with:
         name: storybook
         path: packages/frontend/storybook-static
