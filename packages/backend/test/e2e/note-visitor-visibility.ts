@@ -79,7 +79,12 @@ describe('Remote notes embedded in local notes', () => {
 		expect(member.body[relation]?.text).toBe(target.text);
 		expect(member.body[relation]?.cw).toBe(target.cw);
 		expect(member.body[relation]?.fileIds).toEqual(target.fileIds);
-		expect(member.body[relation]?.poll?.choices.map(choice => choice.text)).toEqual(['A', 'B']);
+		if (relation === 'renote') {
+			expect(member.body[relation]?.poll?.choices.map(choice => choice.text)).toEqual(['A', 'B']);
+		} else {
+			expect(member.body[relation]?.hasPoll).toBe(true);
+			expect(member.body[relation]?.poll).toBeUndefined();
+		}
 		expect(member.body[relation]?.mentions).toEqual([author.id]);
 		expect(member.body[relation]?.reactions).toEqual({ [reaction]: 1 });
 		expect(member.body[relation]?.reactionEmojis).toEqual({ 'boundary_flower@fixture.test': emojiUrl });
