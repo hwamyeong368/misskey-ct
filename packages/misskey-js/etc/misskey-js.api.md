@@ -2478,6 +2478,8 @@ declare namespace entities {
         NotesMentionsResponse,
         NotesPollsRecommendationRequest,
         NotesPollsRecommendationResponse,
+        NotesPollsTranslateRequest,
+        NotesPollsTranslateResponse,
         NotesPollsVoteRequest,
         NotesReactionsRequest,
         NotesReactionsResponse,
@@ -2615,6 +2617,8 @@ declare namespace entities {
         UsersSearchByUsernameAndHostResponse,
         UsersShowRequest,
         UsersShowResponse,
+        UsersTranslateRequest,
+        UsersTranslateResponse,
         UsersUpdateMemoRequest,
         V2AdminEmojiListRequest,
         V2AdminEmojiListResponse,
@@ -3594,6 +3598,12 @@ type NotesPollsRecommendationRequest = operations['notes___polls___recommendatio
 type NotesPollsRecommendationResponse = operations['notes___polls___recommendation']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type NotesPollsTranslateRequest = operations['notes___polls___translate']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type NotesPollsTranslateResponse = operations['notes___polls___translate']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type NotesPollsVoteRequest = operations['notes___polls___vote']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -4310,6 +4320,12 @@ type UsersShowRequest = operations['users___show']['requestBody']['content']['ap
 
 // @public (undocumented)
 type UsersShowResponse = operations['users___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type UsersTranslateRequest = operations['users___translate']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type UsersTranslateResponse = operations['users___translate']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type UsersUpdateMemoRequest = operations['users___update-memo']['requestBody']['content']['application/json'];

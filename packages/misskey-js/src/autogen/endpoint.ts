@@ -627,6 +627,8 @@ import type {
 	NotesMentionsResponse,
 	NotesPollsRecommendationRequest,
 	NotesPollsRecommendationResponse,
+	NotesPollsTranslateRequest,
+	NotesPollsTranslateResponse,
 	NotesPollsVoteRequest,
 	NotesReactionsRequest,
 	NotesReactionsResponse,
@@ -764,6 +766,8 @@ import type {
 	UsersSearchByUsernameAndHostResponse,
 	UsersShowRequest,
 	UsersShowResponse,
+	UsersTranslateRequest,
+	UsersTranslateResponse,
 	UsersUpdateMemoRequest,
 	V2AdminEmojiListRequest,
 	V2AdminEmojiListResponse,
@@ -1179,6 +1183,7 @@ export type Endpoints = {
 	'notes/local-timeline': { req: NotesLocalTimelineRequest; res: NotesLocalTimelineResponse };
 	'notes/mentions': { req: NotesMentionsRequest; res: NotesMentionsResponse };
 	'notes/polls/recommendation': { req: NotesPollsRecommendationRequest; res: NotesPollsRecommendationResponse };
+	'notes/polls/translate': { req: NotesPollsTranslateRequest; res: NotesPollsTranslateResponse };
 	'notes/polls/vote': { req: NotesPollsVoteRequest; res: EmptyResponse };
 	'notes/reactions': { req: NotesReactionsRequest; res: NotesReactionsResponse };
 	'notes/reactions/create': { req: NotesReactionsCreateRequest; res: EmptyResponse };
@@ -1269,6 +1274,7 @@ export type Endpoints = {
 	'users/search': { req: UsersSearchRequest; res: UsersSearchResponse };
 	'users/search-by-username-and-host': { req: UsersSearchByUsernameAndHostRequest; res: UsersSearchByUsernameAndHostResponse };
 	'users/show': { req: UsersShowRequest; res: UsersShowResponse };
+	'users/translate': { req: UsersTranslateRequest; res: UsersTranslateResponse };
 	'users/update-memo': { req: UsersUpdateMemoRequest; res: EmptyResponse };
 	'v2/admin/emoji/list': { req: V2AdminEmojiListRequest; res: V2AdminEmojiListResponse };
 	'verify-email': { req: VerifyEmailRequest; res: EmptyResponse };
