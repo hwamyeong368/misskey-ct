@@ -661,12 +661,12 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 						background: none;
 						color: var(--MI_THEME-accent);
 
-						> .icon {
+						.icon {
 							background: var(--MI_THEME-accentedBg);
 						}
 					}
 
-					> .icon {
+					.icon {
 						display: grid;
 						place-content: center;
 						margin-right: 0;
@@ -679,12 +679,12 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 						border-radius: 100%;
 					}
 
-					> .text {
+					.text {
 						padding-right: 0;
 						width: 100%;
 						font-size: 0.8em;
 					}
-          > .itemIndicator {
+          .itemIndicator {
 						display: flex;
 						top: 0;
             left: calc(50% - 30px);
