@@ -74,6 +74,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</template>
 		</I18n> - <button class="_textButton" @click="cancelSchedule()">{{ i18n.ts.cancel }}</button>
 	</MkInfo>
+	<MkInfo v-if="scheduledNoteDelete != null" warn :class="$style.scheduledAt">
+		<I18n :src="i18n.ts.scheduledToDeleteOnX" tag="span">
+			<template #x>
+				<MkTime v-if="scheduledDeleteAt" :key="scheduledDeleteAt" :time="scheduledDeleteAt" :mode="'detail'" style="font-weight: bold;"/>
+			</template>
+		</I18n> - <button class="_textButton" @click="cancelScheduleDelete()">{{ i18n.ts.cancel }}</button>
+	</MkInfo>
 	<MkInfo v-if="hasNotSpecifiedMentions" warn :class="$style.hasNotSpecifiedMentions">{{ i18n.ts.notSpecifiedMentionWarning }} - <button class="_textButton" @click="addMissingMention()">{{ i18n.ts.add }}</button></MkInfo>
 	<div v-show="useCw" :class="$style.cwOuter">
 		<input ref="cwInputEl" v-model="cw" name="search" autocomplete="off" :class="$style.cw" :placeholder="i18n.ts.annotation" @keydown="onKeydown" @keyup="onKeyup" @paste="pastePlainTextInsteadOfUriList" @compositionend="onCompositionEnd">
@@ -93,6 +100,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkUploaderItems :items="uploader.items.value" @showMenu="(item, ev) => showPerUploadItemMenu(item, ev)" @showMenuViaContextmenu="(item, ev) => showPerUploadItemMenuViaContextmenu(item, ev)"/>
 	</div>
 	<MkPollEditor v-if="poll" :key="draftRestoreVersion" v-model="poll" @destroyed="poll = null"/>
+	<MkScheduledNoteDelete v-if="scheduledNoteDelete" :key="draftRestoreVersion" v-model="scheduledNoteDelete"/>
 	<MkNotePreview v-if="showPreview" :class="$style.preview" :text="text" :files="files" :poll="poll ?? undefined" :useCw="useCw" :cw="cw" :user="postAccount ?? $i"/>
 	<div v-if="showingOptions" style="padding: 8px 16px;">
 	</div>
@@ -129,11 +137,13 @@ import type { ShallowRef } from 'vue';
 import type { PostFormProps, StoredDrafts } from '@/types/post-form.js';
 import type { MenuItem } from '@/types/menu.js';
 import type { PollEditorModelValue } from '@/components/MkPollEditor.vue';
+import type { DeleteScheduleEditorModelValue } from '@/components/MkScheduledNoteDelete.vue';
 import type { UploadAccount, UploaderItem } from '@/composables/use-uploader.js';
 import MkNotePreview from '@/components/MkNotePreview.vue';
 import XPostFormAttaches from '@/components/MkPostFormAttaches.vue';
 import XTextCounter from '@/components/MkPostForm.TextCounter.vue';
 import MkPollEditor from '@/components/MkPollEditor.vue';
+import MkScheduledNoteDelete from '@/components/MkScheduledNoteDelete.vue';
 import MkNoteSimple from '@/components/MkNoteSimple.vue';
 import { erase, unique } from '@/utility/array.js';
 import { extractMentions } from '@/utility/extract-mentions.js';
@@ -231,6 +241,12 @@ type QuotePolicy = 'followers' | 'nobody' | null;
 const replyPolicy = ref<ReplyPolicy>(null);
 const quotePolicy = ref<QuotePolicy>(null);
 const scheduledAt = ref<number | null>(null);
+const scheduledNoteDelete = ref<DeleteScheduleEditorModelValue | null>(null);
+const scheduledDeleteAt = computed(() => {
+	if (scheduledNoteDelete.value?.deleteAt) return scheduledNoteDelete.value.deleteAt;
+	else if (scheduledNoteDelete.value?.deleteAfter) return Date.now() + scheduledNoteDelete.value.deleteAfter;
+	return null;
+});
 const draghover = ref(false);
 const quoteId = ref<string | null>(null);
 const hasNotSpecifiedMentions = ref(false);
@@ -466,6 +482,7 @@ function watchForDraft() {
 	watch(replyPolicy, () => saveDraft());
 	watch(quotePolicy, () => saveDraft());
 	watch(scheduledAt, () => saveDraft());
+	watch(scheduledNoteDelete, () => saveDraft());
 }
 
 function checkMissingMention() {
@@ -772,7 +789,13 @@ function showOtherSettings() {
 		action: () => {
 			schedule();
 		},
-	}] : []), { type: 'divider' }, {
+	}] : []), {
+		icon: 'ti ti-clock-hour-9',
+		text: i18n.ts.scheduledNoteDelete + '...',
+		action: () => {
+			toggleScheduledNoteDelete();
+		},
+	}, { type: 'divider' }, {
 		type: 'switch',
 		icon: 'ti ti-eye',
 		text: i18n.ts.preview,
@@ -844,6 +867,7 @@ function clear() {
 	poll.value = null;
 	quoteId.value = null;
 	scheduledAt.value = null;
+	scheduledNoteDelete.value = null;
 	uploader.reset();
 }
 
@@ -1019,6 +1043,7 @@ function saveDraft() {
 			replyPolicy: replyPolicy.value,
 			quotePolicy: quotePolicy.value,
 			scheduledAt: scheduledAt.value,
+			scheduledNoteDelete: scheduledNoteDelete.value,
 		},
 	};
 
@@ -1058,6 +1083,7 @@ async function saveServerDraft(accountId: string, token: string | undefined, isA
 			quotePolicy: quotePolicy.value,
 			scheduledAt: scheduledAt.value,
 			isActuallyScheduled: isActuallyScheduled,
+			scheduledDelete: scheduledNoteDelete.value,
 		}, token);
 	} catch (err) {
 		void os.apiErrorDialog(endpoint, err as Misskey.api.APIError);
@@ -1176,6 +1202,7 @@ async function submitPost(account: UploadAccount, ev?: PointerEvent) {
 		visibleUserIds: visibility.value === 'specified' ? visibleUsers.value.map(u => u.id) : undefined,
 		reactionAcceptance: reactionAcceptance.value,
 		...(noteId.value == null ? { replyPolicy: replyPolicy.value, quotePolicy: quotePolicy.value } : {}),
+		scheduledDelete: scheduledNoteDelete.value,
 	};
 
 	if (withHashtags.value && hashtags.value && hashtags.value.trim() !== '') {
@@ -1229,6 +1256,7 @@ async function submitPost(account: UploadAccount, ev?: PointerEvent) {
 				files: res.updatedNote.files,
 				fileIds: res.updatedNote.fileIds,
 				poll: res.updatedNote.poll,
+				deleteAt: res.updatedNote.deleteAt,
 			});
 		} else if (res.createdNote != null) {
 			globalEvents.emit('notePosted', res.createdNote);
@@ -1440,6 +1468,10 @@ async function openAccountMenu(ev: PointerEvent) {
 				replyPolicy.value = draft.replyPolicy ?? null;
 				quotePolicy.value = draft.quotePolicy ?? null;
 				scheduledAt.value = draft.scheduledAt ?? null;
+				scheduledNoteDelete.value = draft.deleteAt ? {
+					deleteAt: new Date(draft.deleteAt).getTime(),
+					deleteAfter: null,
+				} : null;
 				serverDraft.value = { id: draft.id, accountId: account.id };
 			},
 			cancel: () => {
@@ -1506,6 +1538,21 @@ async function schedule() {
 
 function cancelSchedule() {
 	scheduledAt.value = null;
+}
+
+function toggleScheduledNoteDelete() {
+	if (scheduledNoteDelete.value) {
+		scheduledNoteDelete.value = null;
+	} else {
+		scheduledNoteDelete.value = {
+			deleteAt: null,
+			deleteAfter: null,
+		};
+	}
+}
+
+function cancelScheduleDelete() {
+	scheduledNoteDelete.value = null;
 }
 
 function showTour() {
@@ -1607,6 +1654,7 @@ onMounted(() => {
 				replyPolicy.value = draft.data.replyPolicy ?? null;
 				quotePolicy.value = draft.data.quotePolicy ?? null;
 				scheduledAt.value = draft.data.scheduledAt ?? null;
+				scheduledNoteDelete.value = draft.data.scheduledNoteDelete ?? null;
 			}
 		}
 
@@ -1638,6 +1686,12 @@ onMounted(() => {
 			}
 			quoteId.value = renoteTargetNote.value ? renoteTargetNote.value.id : null;
 			reactionAcceptance.value = init.reactionAcceptance;
+			if (init.deleteAt) {
+				scheduledNoteDelete.value = {
+					deleteAt: new Date(init.deleteAt).getTime(),
+					deleteAfter: null,
+				};
+			}
 		}
 
 		nextTick(() => watchForDraft());

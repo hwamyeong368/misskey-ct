@@ -28,6 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i class="ti ti-pencil"></i>
 		</button>
 		<span v-else-if="updatedAt" style="margin-right: 0.5em;" :title="i18n.ts.edited"><i class="ti ti-pencil"></i></span>
+		<span v-if="note.deleteAt" style="margin-right: 0.5em;" :title="`${i18n.ts.scheduledNoteDelete}: ${(new Date(note.deleteAt)).toLocaleString()}`"><i class="ti ti-bomb"></i></span>
 		<div v-if="mock">
 			<MkTime :time="note.createdAt" colored/>
 		</div>

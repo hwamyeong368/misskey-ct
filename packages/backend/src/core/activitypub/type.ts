@@ -158,6 +158,7 @@ export interface IPost extends IObject {
 	quoteUri?: string;
 	quoteAuthorization?: string;
 	interactionPolicy?: unknown;
+	deleteAt?: string;
 }
 
 // arti: FEP-044f quote request (Mastodon 4.5+). `object` is the quoted note, `instrument` the quoting post.

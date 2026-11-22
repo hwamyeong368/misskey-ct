@@ -186,6 +186,12 @@ export class NoteDraftService {
 			}
 		}
 
+		if (data.deleteAt != null) {
+			if (data.deleteAt.getTime() < Date.now()) {
+				throw new IdentifiableError('e16efd6a-8f31-4d24-9fe3-e06df47c2d4e', 'Cannot specify delete time earlier than now');
+			}
+		}
+
 		//#region visibleUsers
 		let _visibleUsers: MiUser[] = [];
 		if (data.visibleUserIds != null && data.visibleUserIds.length > 0) {

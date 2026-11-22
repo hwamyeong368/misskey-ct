@@ -40,6 +40,7 @@ import { extractHashtags } from '@/misc/extract-hashtags.js';
 import { normalizeTag } from '@/misc/normalize-tag.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { UtilityService } from '@/core/UtilityService.js';
+import { QueueService } from '@/core/QueueService.js';
 
 type Option = {
 	cw?: string | null;
@@ -49,6 +50,7 @@ type Option = {
 	poll?: IPoll | null;
 	localOnly?: boolean | null;
 	updatedAt: Date;
+	deleteAt?: Date | null;
 };
 
 @Injectable()
@@ -103,6 +105,7 @@ export class NoteUpdateService implements OnApplicationShutdown {
 		private fanoutTimelineService: FanoutTimelineService,
 		private idService: IdService,
 		private utilityService: UtilityService,
+		private queueService: QueueService,
 	) { }
 
 	@bindThis
@@ -187,7 +190,7 @@ export class NoteUpdateService implements OnApplicationShutdown {
 		});
 
 		setImmediate('post updating', { signal: this.#shutdownController.signal }).then(
-			() => this.postNoteUpdated(updatedNote, user, silent),
+			() => this.postNoteUpdated(updatedNote, user, silent, data.deleteAt !== undefined),
 			() => { /* aborted, ignore this */ },
 		);
 
@@ -247,6 +250,11 @@ export class NoteUpdateService implements OnApplicationShutdown {
 		if (data.fileIds !== undefined) {
 			update.fileIds = data.fileIds ?? [];
 			update.attachedFileTypes = files.map(file => file.type);
+		}
+
+		// Update scheduled deletion time
+		if (data.deleteAt !== undefined) {
+			update.deleteAt = data.deleteAt;
 		}
 
 		// Recompute derived fields based on updated content
@@ -315,7 +323,23 @@ export class NoteUpdateService implements OnApplicationShutdown {
 		host: MiUser['host'];
 		username: MiUser['username'];
 		isBot: MiUser['isBot'];
-	}, silent: boolean) {
+	}, silent: boolean, updateScheduledDelete = false) {
+		if (updateScheduledDelete) {
+			// The job is keyed by the note ID (see NoteCreateService), so the one of the previous deleteAt can be replaced,
+			// or dropped when the scheduled deletion was removed
+			await (await this.queueService.scheduledNoteDeleteQueue.getJob(note.id))?.remove();
+			if (note.deleteAt) {
+				const delay = Math.max(0, note.deleteAt.getTime() - Date.now());
+				await this.queueService.scheduledNoteDeleteQueue.add(note.id, {
+					noteId: note.id,
+				}, {
+					jobId: note.id,
+					delay,
+					removeOnComplete: true,
+				});
+			}
+		}
+
 		if (!silent) {
 			if (this.userEntityService.isLocalUser(user)) this.activeUsersChart.write(user);
 

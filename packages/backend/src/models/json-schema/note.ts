@@ -290,6 +290,12 @@ export const packedNoteSchema = {
 			optional: true, nullable: true,
 		},
 
+		deleteAt: {
+			type: 'string',
+			optional: true, nullable: true,
+			format: 'date-time',
+		},
+
 		isEdited: {
 			type: 'boolean',
 			optional: false, nullable: false,

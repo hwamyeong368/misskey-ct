@@ -50,6 +50,7 @@ const base: MiNote = {
 	renoteChannelId: null,
 	// bscone: note editing
 	updatedAt: null,
+	deleteAt: null,
 };
 
 describe('misc:is-renote', () => {

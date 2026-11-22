@@ -356,6 +356,7 @@ export class ApNoteService {
 				poll,
 				uri: note.id,
 				url: url,
+				deleteAt: note.deleteAt && !Number.isNaN(new Date(note.deleteAt).getTime()) ? new Date(note.deleteAt) : null,
 			}, silent);
 		} catch (err: any) {
 			if (err.name !== 'duplicated') {
@@ -466,6 +467,7 @@ export class ApNoteService {
 			text,
 			// bscone: ignore malformed or future timestamps from remote
 			updatedAt: (note.updated && this.idService.isSafeT(new Date(note.updated).valueOf())) ? new Date(note.updated) : new Date(),
+			deleteAt: note.deleteAt && !Number.isNaN(new Date(note.deleteAt).getTime()) ? new Date(note.deleteAt) : null,
 		};
 
 		// Only update fileIds if attachments are present in the update

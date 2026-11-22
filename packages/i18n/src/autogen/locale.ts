@@ -15595,4 +15595,38 @@ export interface Locale extends ILocale {
          */
         "deleteTrustedDomainList": string;
     };
+    /**
+     * ノートの削除を予約
+     */
+    "scheduledNoteDelete": string;
+    /**
+     * {x}に削除が予約されています
+     */
+    "scheduledToDeleteOnX": ParameterizedString<"x">;
+    "_scheduledNoteDelete": {
+        /**
+         * 期限
+         */
+        "expiration": string;
+        /**
+         * 日時指定
+         */
+        "at": string;
+        /**
+         * 経過指定
+         */
+        "after": string;
+        /**
+         * 期日
+         */
+        "deadlineDate": string;
+        /**
+         * 時間
+         */
+        "deadlineTime": string;
+        /**
+         * 期間
+         */
+        "duration": string;
+    };
 }

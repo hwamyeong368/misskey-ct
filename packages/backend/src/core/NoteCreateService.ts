@@ -192,6 +192,7 @@ type Option = {
 	uri?: string | null;
 	url?: string | null;
 	app?: MiApp | null;
+	deleteAt?: Date | null;
 };
 
 @Injectable()
@@ -303,6 +304,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 		apMentions?: MinimumUser[] | null;
 		apHashtags?: string[] | null;
 		apEmojis?: string[] | null;
+		deleteAt?: Date | null;
 	}): Promise<MiNote> {
 		const visibleUsers = data.visibleUserIds.length > 0 ? await this.usersRepository.findBy({
 			id: In(data.visibleUserIds),
@@ -456,6 +458,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 			apMentions: data.apMentions,
 			apHashtags: data.apHashtags,
 			apEmojis: data.apEmojis,
+			deleteAt: data.deleteAt,
 		});
 	}
 
@@ -693,6 +696,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 			reactionAcceptance: data.reactionAcceptance ?? null,
 			replyPolicy: data.replyPolicy ?? null,
 			quotePolicy: data.quotePolicy ?? null,
+			deleteAt: data.deleteAt ?? null,
 			visibility: data.visibility as any,
 			visibleUserIds: data.visibility === 'specified'
 				? data.visibleUsers
@@ -984,6 +988,18 @@ export class NoteCreateService implements OnApplicationShutdown {
 				if (count === 1) {
 					this.channelsRepository.increment({ id: data.channel!.id }, 'usersCount', 1);
 				}
+			});
+		}
+
+		if (data.deleteAt) {
+			const delay = Math.max(0, data.deleteAt.getTime() - Date.now());
+			this.queueService.scheduledNoteDeleteQueue.add(note.id, {
+				noteId: note.id,
+			}, {
+				// The note ID as the job ID lets an edit of deleteAt find and replace this job
+				jobId: note.id,
+				delay,
+				removeOnComplete: true,
 			});
 		}
 

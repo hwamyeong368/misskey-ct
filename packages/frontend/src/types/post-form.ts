@@ -5,6 +5,7 @@
 
 import type * as Misskey from 'misskey-js';
 import type { PollEditorModelValue } from '@/components/MkPollEditor.vue';
+import type { DeleteScheduleEditorModelValue } from '@/components/MkScheduledNoteDelete.vue';
 
 export interface PostFormProps {
 	reply?: Misskey.entities.Note | null;
@@ -50,6 +51,7 @@ export type StoredDrafts = {
 			replyPolicy?: 'followers' | 'following' | 'mentioned' | 'nobody' | null;
 			quotePolicy?: 'followers' | 'nobody' | null;
 			scheduledAt: number | null;
+			scheduledNoteDelete?: DeleteScheduleEditorModelValue | null;
 		};
 	};
 };
