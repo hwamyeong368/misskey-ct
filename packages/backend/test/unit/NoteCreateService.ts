@@ -67,6 +67,7 @@ describe('NoteCreateService', () => {
 			renoteChannelId: null,
 			// bscone: note editing
 			updatedAt: null,
+			deleteAt: null,
 		};
 
 		const poll: IPoll = {

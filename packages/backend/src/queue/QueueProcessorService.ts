@@ -54,6 +54,7 @@ import { BakeBufferedReactionsProcessorService } from './processors/BakeBuffered
 import { CleanProcessorService } from './processors/CleanProcessorService.js';
 import { AggregateRetentionProcessorService } from './processors/AggregateRetentionProcessorService.js';
 import { CleanRemoteNotesProcessorService } from './processors/CleanRemoteNotesProcessorService.js';
+import { ScheduledNoteDeleteProcessorService } from './processors/ScheduledNoteDeleteProcessorService.js';
 import { QueueLoggerService } from './QueueLoggerService.js';
 import { AutoDeleteNotesProcessorService } from './processors/AutoDeleteNotesProcessorService.js';
 import { runAsBulkDelivery } from '@/misc/bulk-delivery-context.js';
@@ -98,6 +99,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 	private objectStorageQueueWorker: Bull.Worker;
 	private endedPollNotificationQueueWorker: Bull.Worker;
 	private postScheduledNoteQueueWorker: Bull.Worker;
+	private scheduledNoteDeleteQueueWorker: Bull.Worker;
 
 	constructor(
 		@Inject(DI.config)
@@ -148,6 +150,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 		private cleanProcessorService: CleanProcessorService,
 		private autoDeleteNotesProcessorService: AutoDeleteNotesProcessorService,
 		private cleanRemoteNotesProcessorService: CleanRemoteNotesProcessorService,
+		private scheduledNoteDeleteProcessorService: ScheduledNoteDeleteProcessorService,
 	) {
 		this.logger = this.queueLoggerService.logger;
 
@@ -568,6 +571,23 @@ export class QueueProcessorService implements OnApplicationShutdown {
 			});
 		}
 		//#endregion
+
+		//#region scheduled note delete
+		{
+			const logger = this.logger.createSubLogger('scheduled-note-delete');
+			this.scheduledNoteDeleteQueueWorker = new Bull.Worker(QUEUE.SCHEDULED_NOTE_DELETE, (job) => {
+				return runQueueJob(
+					this.telemetryService,
+					'Queue: ScheduledNoteDelete',
+					() => this.scheduledNoteDeleteProcessorService.process(job),
+					err => logger.error(`failed(${err.name}: ${err.message}) id=${job.id}`, { job: renderJob(job), e: renderError(err) }),
+				);
+			}, {
+				...baseWorkerOptions(this.config, QUEUE.SCHEDULED_NOTE_DELETE),
+				autorun: false,
+			});
+		}
+		//#endregion
 	}
 
 	@bindThis
@@ -583,6 +603,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 			this.objectStorageQueueWorker.run(),
 			this.endedPollNotificationQueueWorker.run(),
 			this.postScheduledNoteQueueWorker.run(),
+			this.scheduledNoteDeleteQueueWorker.run(),
 		]);
 	}
 
@@ -599,6 +620,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 			this.objectStorageQueueWorker.close(),
 			this.endedPollNotificationQueueWorker.close(),
 			this.postScheduledNoteQueueWorker.close(),
+			this.scheduledNoteDeleteQueueWorker.close(),
 		]);
 	}
 

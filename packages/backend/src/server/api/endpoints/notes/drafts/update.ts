@@ -177,6 +177,12 @@ export const meta = {
 			code: 'SCHEDULED_AT_MUST_BE_IN_FUTURE',
 			id: 'ed1a6673-d0d1-4364-aaae-9bf3f139cbc5',
 		},
+
+		cannotScheduleDeleteEarlierThanNow: {
+			message: 'Cannot specify delete time earlier than now.',
+			code: 'CANNOT_SCHEDULE_DELETE_EARLIER_THAN_NOW',
+			id: '9f04994a-3aa2-11ef-a495-177eea74788f',
+		},
 	},
 
 	limit: {
@@ -237,6 +243,14 @@ export const paramDef = {
 		},
 		scheduledAt: { type: 'integer', nullable: true },
 		isActuallyScheduled: { type: 'boolean' },
+		scheduledDelete: {
+			type: 'object',
+			nullable: true,
+			properties: {
+				deleteAt: { type: 'integer', nullable: true },
+				deleteAfter: { type: 'integer', nullable: true, minimum: 1 },
+			},
+		},
 	},
 	required: ['draftId'],
 } as const;
@@ -268,6 +282,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				channelId: ps.channelId,
 				scheduledAt: ps.scheduledAt ? new Date(ps.scheduledAt) : null,
 				isActuallyScheduled: ps.isActuallyScheduled,
+				...(ps.scheduledDelete !== undefined ? {
+					deleteAt: ps.scheduledDelete?.deleteAt ? new Date(ps.scheduledDelete.deleteAt) : ps.scheduledDelete?.deleteAfter ? new Date(Date.now() + ps.scheduledDelete.deleteAfter) : null,
+				} : {}),
 			}).catch((err) => {
 				if (err instanceof IdentifiableError) {
 					switch (err.id) {
@@ -315,6 +332,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							throw new ApiError(meta.errors.scheduledAtRequired);
 						case 'b34d0c1b-996f-4e34-a428-c636d98df457':
 							throw new ApiError(meta.errors.scheduledAtMustBeInFuture);
+						case 'e16efd6a-8f31-4d24-9fe3-e06df47c2d4e':
+							throw new ApiError(meta.errors.cannotScheduleDeleteEarlierThanNow);
 						default:
 							throw err;
 					}

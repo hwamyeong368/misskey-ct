@@ -177,4 +177,10 @@ export class MiNoteDraft {
 		default: false,
 	})
 	public isActuallyScheduled: boolean;
+
+	@Column('timestamp with time zone', {
+		nullable: true,
+		comment: 'The scheduled deletion date of the NoteDraft.',
+	})
+	public deleteAt: Date | null;
 }

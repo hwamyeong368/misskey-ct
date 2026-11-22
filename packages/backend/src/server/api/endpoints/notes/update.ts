@@ -74,6 +74,12 @@ export const meta = {
 			code: 'CANNOT_FEDERATE_CHANNEL_NOTE',
 			id: 'bdd090b6-d1f2-4a52-879a-3b5cb47037bc',
 		},
+
+		cannotScheduleDeleteEarlierThanNow: {
+			message: 'Cannot specify delete time earlier than now.',
+			code: 'CANNOT_SCHEDULE_DELETE_EARLIER_THAN_NOW',
+			id: '9f04994a-3aa2-11ef-a495-177eea74788f',
+		},
 	},
 } as const;
 
@@ -113,6 +119,14 @@ export const paramDef = {
 				expiresAt: { type: 'integer', nullable: true },
 			},
 			required: ['choices'],
+		},
+		scheduledDelete: {
+			type: 'object',
+			nullable: true,
+			properties: {
+				deleteAt: { type: 'integer', nullable: true },
+				deleteAfter: { type: 'integer', nullable: true, minimum: 1 },
+			},
 		},
 	},
 	required: ['noteId'],
@@ -154,7 +168,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.accessDenied);
 			}
 
-			if (ps.text === undefined && ps.cw === undefined && ps.visibility === undefined && ps.fileIds === undefined && ps.poll === undefined && ps.localOnly === undefined) {
+			if (ps.text === undefined && ps.cw === undefined && ps.visibility === undefined && ps.fileIds === undefined && ps.poll === undefined && ps.localOnly === undefined && ps.scheduledDelete === undefined) {
 				throw new ApiError(meta.errors.invalidParam);
 			}
 
@@ -172,6 +186,22 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
+			let deleteAt: Date | null | undefined = undefined;
+			if (ps.scheduledDelete !== undefined) {
+				if (ps.scheduledDelete === null) {
+					deleteAt = null;
+				} else if (typeof ps.scheduledDelete.deleteAt === 'number') {
+					if (ps.scheduledDelete.deleteAt < Date.now()) {
+						throw new ApiError(meta.errors.cannotScheduleDeleteEarlierThanNow);
+					}
+					deleteAt = new Date(ps.scheduledDelete.deleteAt);
+				} else if (typeof ps.scheduledDelete.deleteAfter === 'number') {
+					deleteAt = new Date(Date.now() + ps.scheduledDelete.deleteAfter);
+				} else {
+					deleteAt = null;
+				}
+			}
+
 			// この操作を行うのが投稿者とは限らない(例えばモデレーター)ため
 			const updatedNote = await this.noteUpdateService.update(await this.usersRepository.findOneByOrFail({ id: note.userId }), note, {
 				cw: ps.cw,
@@ -181,6 +211,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				fileIds: ps.fileIds,
 				poll: poll,
 				updatedAt: new Date(),
+				...(deleteAt !== undefined ? { deleteAt } : {}),
 			}, false, me).catch(err => {
 				// bscone: map content check failures from the service to API errors
 				if (err instanceof IdentifiableError) {

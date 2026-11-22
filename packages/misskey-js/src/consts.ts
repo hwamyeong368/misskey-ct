@@ -252,6 +252,7 @@ export const queueTypes = [
 	'objectStorage',
 	'userWebhookDeliver',
 	'systemWebhookDeliver',
+	'scheduledNoteDelete',
 ] as const;
 
 // See: packages/backend/src/core/ReversiService.ts@L410

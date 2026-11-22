@@ -172,3 +172,7 @@ export type UserWebhookDeliverJobData<T extends WebhookEventTypes = WebhookEvent
 export type ThinUser = {
 	id: MiUser['id'];
 };
+
+export type ScheduledNoteDeleteJobData = {
+	noteId: MiNote['id'];
+};

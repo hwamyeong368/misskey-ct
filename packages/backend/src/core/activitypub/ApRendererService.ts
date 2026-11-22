@@ -556,6 +556,10 @@ export class ApRendererService {
 			canReply: { automaticApproval: audienceFor(note.replyPolicy ?? null), manualApproval: [] },
 		};
 
+		const asDeleteAt = note.deleteAt ? {
+			deleteAt: note.deleteAt.toISOString(),
+		} as const : {};
+
 		return {
 			id: `${this.config.url}/notes/${note.id}`,
 			type: 'Note',
@@ -581,6 +585,7 @@ export class ApRendererService {
 			attachment: files.map(x => this.renderDocument(x)),
 			sensitive: note.cw != null || files.some(file => file.isSensitive),
 			tag,
+			...asDeleteAt,
 			...asPoll,
 		};
 	}

@@ -59,6 +59,7 @@ export class PostScheduledNoteProcessorService {
 				visibility: draft.visibility,
 				visibleUserIds: draft.visibleUserIds,
 				channelId: draft.channelId,
+				deleteAt: draft.deleteAt ? new Date(draft.deleteAt) : null,
 			});
 
 			// await不要
