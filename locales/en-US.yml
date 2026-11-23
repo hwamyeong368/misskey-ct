@@ -2096,6 +2096,18 @@ _achievements:
       description: "Two of the biggest objects in the bubble game at the same time"
       flavor: "You can fill a lunch box like this 🤯 🤯 a bit."
 _role:
+  _tierFix:
+    overlapTitle: "Overlapping roles"
+    overlapText: "Multiple roles apply at the same time with the current conditions. Adjust the conditions so they no longer overlap?"
+    fixConditions: "Fix conditions"
+    saveAsIs: "Save as is"
+    rangeFrom: "{min} and above"
+    range: "{min}-{max}"
+    loweredTitle: "Permissions drop"
+    loweredText: "This condition is stricter but grants fewer permissions than the existing role. Copy only the lowered parts?"
+    copyLowered: "Copy lowered parts only"
+    doNotCopy: "Do not copy"
+    unlimited: "Unlimited"
   new: "New role"
   edit: "Edit role"
   name: "Role name"
@@ -3618,3 +3630,29 @@ _interactionPolicy:
   mentioned: "Mentioned users"
   nobody: "Only me"
   replyRestricted: "Replies to this note are restricted"
+
+trustedLinkUrlPatterns: "External link warning allowlist"
+trustedLinkUrlPatternsDescription: "Space-separated entries are AND, line breaks are OR. Wrap in slashes for a regular expression; a bare domain matches as a suffix."
+open: "Open"
+
+_externalNavigationWarning:
+  title: "Leaving for an external site"
+  description: "You are leaving {host} for an external site"
+  trustThisDomain: "Trust this domain on this device from now on"
+  externalNavigationWarning: "Warning when leaving for external sites"
+  enableExternalNavigationWarning: "Show a warning when leaving for external sites"
+  trustedDomainList: "Trusted domain list"
+  trustedDomainListDescription: "Omit `http://` and `https://`."
+  trustedDomainListDescription2: "Separate entries with line breaks"
+  deleteTrustedDomainList: "Reset trusted domain list"
+
+scheduledNoteDelete: "Schedule note deletion"
+scheduledToDeleteOnX: "Scheduled to be deleted on {x}"
+
+_scheduledNoteDelete:
+  expiration: "Expiration"
+  at: "Specific date"
+  after: "After a duration"
+  deadlineDate: "Date"
+  deadlineTime: "Time"
+  duration: "Duration"

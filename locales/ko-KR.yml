@@ -2320,6 +2320,18 @@ _voiceCall:
   recordingStartRejected: "서버가 녹화를 받아들이지 않아 녹화를 시작하지 못했어요"
   recordingRejected: "서버가 녹화를 받아들이지 않아 녹화를 멈췄어요"
 _role:
+  _tierFix:
+    overlapTitle: "겹치는 역할이 있습니다"
+    overlapText: "현재 조건에서는 여러 역할이 동시에 부여됩니다. 겹치지 않도록 다음처럼 조건을 수정할까요?"
+    fixConditions: "조건 수정"
+    saveAsIs: "그대로 저장"
+    rangeFrom: "{min} 이상"
+    range: "{min}~{max}"
+    loweredTitle: "권한이 낮아집니다"
+    loweredText: "더 어려운 조건인데 기존 역할보다 권한이 낮아집니다. 낮아지는 부분만 복사할까요?"
+    copyLowered: "낮아지는 부분만 복사"
+    doNotCopy: "복사하지 않음"
+    unlimited: "무제한"
   new: "새 역할 생성"
   edit: "역할 수정"
   name: "역할 이름"
@@ -4006,3 +4018,29 @@ _noteCleanup:
   confirmationError: "켜거나 끄려면 확인이 필요해요."
   selectionError: "선택한 규칙을 사용할 수 없어요. 다시 불러온 뒤 규칙을 선택해 주세요."
   keepRunError: "남기기 규칙은 자동 정리를 사용할 수 없어요."
+
+trustedLinkUrlPatterns: "외부 사이트 링크 경고 제외 목록"
+trustedLinkUrlPatternsDescription: "공백으로 구분하면 AND, 줄바꿈으로 구분하면 OR입니다. 슬래시로 감싸면 정규식이 되고, 도메인 이름만 적으면 뒤쪽 일치로 처리됩니다."
+open: "열기"
+
+_externalNavigationWarning:
+  title: "외부 사이트로 이동합니다"
+  description: "{host}를 떠나 외부 사이트로 이동합니다"
+  trustThisDomain: "이 기기에서 앞으로 이 도메인을 신뢰"
+  externalNavigationWarning: "외부 사이트로 이동할 때의 경고"
+  enableExternalNavigationWarning: "외부 사이트로 이동할 때 경고 표시"
+  trustedDomainList: "신뢰하는 도메인 목록"
+  trustedDomainListDescription: "`http://`와 `https://`를 생략하고 입력해 주세요."
+  trustedDomainListDescription2: "줄바꿈으로 구분해 설정합니다"
+  deleteTrustedDomainList: "신뢰하는 도메인 목록 초기화"
+
+scheduledNoteDelete: "노트 삭제 예약"
+scheduledToDeleteOnX: "{x}에 삭제가 예약되어 있습니다"
+
+_scheduledNoteDelete:
+  expiration: "만료"
+  at: "날짜 지정"
+  after: "경과 지정"
+  deadlineDate: "기한"
+  deadlineTime: "시간"
+  duration: "기간"
